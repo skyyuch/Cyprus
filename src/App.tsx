@@ -163,25 +163,15 @@ export default function App() {
     };
   });
 
-  // --- Cumulative Stats ---
-  const [statsVolume, setStatsVolume] = useState(4820.45);
-  const [statsLatency, setStatsLatency] = useState(1.85);
+  // --- Cumulative Stats (illustrative; aligned with published figures) ---
+  const [statsVolume, setStatsVolume] = useState(1.02); // $1B+ daily notional
+  const [statsLatency, setStatsLatency] = useState(0.82); // 0.8ms routing core
 
   // --- Active LP (Liquidity Provider) Configuration ---
-  const [lps, setLps] = useState<LP[]>([
-    { name: "JPM", active: true },
-    { name: "BofA", active: true },
-    { name: "Citi", active: true },
-    { name: "GS", active: true },
-    { name: "HSBC", active: true },
-    { name: "UBS", active: true },
-    { name: "DB", active: true },
-    { name: "BNP", active: true },
-    { name: "Nomura", active: true },
-    { name: "SMBC", active: true },
-    { name: "MS", active: true },
-    { name: "Barclays", active: true }
-  ]);
+  // Anonymised tier-1 sources (no third-party / bank trademarks shown).
+  const [lps, setLps] = useState<LP[]>(
+    Array.from({ length: 12 }, (_, i) => ({ name: "LP-" + String(i + 1).padStart(2, "0"), active: true }))
+  );
 
   // --- Control Coefficients ---
   const [simSpeed, setSimSpeed] = useState(1.0);
@@ -189,9 +179,9 @@ export default function App() {
 
   // --- System Logs Output ---
   const [kioskLogs, setKioskLogs] = useState<string[]>([
-    `[${new Date().toISOString().substring(11, 19)}] Aggregation core operating on premium sub-2ms network pipeline.`,
-    `[${new Date().toISOString().substring(11, 19)}] xSyphon SyphonOS successfully loaded for iFX EXPO Cyprus 2026.`,
-    `[${new Date().toISOString().substring(11, 19)}] Initialized zero-knowledge secure lead caching mechanics.`
+    `[${new Date().toISOString().substring(11, 19)}] Syphon OS core online · routing across 12 tier-1 liquidity sources.`,
+    `[${new Date().toISOString().substring(11, 19)}] Aggregation engine loaded for iFX EXPO Cyprus 2026 · Booth 76.`,
+    `[${new Date().toISOString().substring(11, 19)}] Zero last look · best bid/offer selected on every tick.`
   ]);
 
   const addLog = (msg: string) => {
@@ -246,14 +236,17 @@ export default function App() {
         return next;
       });
 
-      // Fluctuate statistics slightly for dynamic presentation
-      setStatsVolume(v => v + 0.12 * (Math.random() * 1.5));
+      // Fluctuate statistics slightly for dynamic presentation (stays ~$1B+)
+      setStatsVolume(v => {
+        const next = v + (Math.random() - 0.3) * 0.004;
+        return next < 1.0 ? 1.0 + Math.random() * 0.02 : next;
+      });
       setStatsLatency(() => {
         const activeCount = lps.filter(x => x.active).length;
-        if (activeCount === 0) return 45.1; // offline lag
-        const baseLat = 1.05 + (12 - activeCount) * 0.4;
-        const delta = (Math.random() - 0.5) * 0.12;
-        return parseFloat(Math.max(0.18, baseLat + delta).toFixed(2));
+        if (activeCount === 0) return 45.1; // no feeds connected
+        const baseLat = 0.8 + (12 - activeCount) * 0.25;
+        const delta = (Math.random() - 0.5) * 0.08;
+        return parseFloat(Math.max(0.6, baseLat + delta).toFixed(2));
       });
 
     }, 1200);
@@ -276,31 +269,31 @@ export default function App() {
     if (isTestingEngine) return;
     setIsTestingEngine(true);
     setTestStage(1);
-    addLog("Diagnostic sequence active: sending ping message packets to 12 target LP clusters...");
+    addLog("Routing test: pinging 12 tier-1 liquidity sources...");
     
     setTimeout(() => {
       setTestStage(2);
-      addLog("Core calculation module: checking spread matrix, evaluating best bid-ask configuration...");
+      addLog("Aggregating depth-of-book · selecting best bid/offer · filtering last look...");
     }, 1000);
 
     setTimeout(() => {
-      // Create optimal result base on connected banks
+      // Result scales with connected feeds (illustrative; 0.8ms routing core)
       const activeLPs = lps.filter(x => x.active).length;
-      let calculatedLatency = 1.25 + (12 - activeLPs) * 0.4 + (Math.random() * 0.3);
+      let calculatedLatency = 0.8 + (12 - activeLPs) * 0.25 + (Math.random() * 0.2);
       if (activeLPs === 0) calculatedLatency = 45.2;
 
       const randomSlippage = activeLPs >= 8 ? 0.0 : parseFloat((Math.random() * 0.15).toFixed(2));
-      const calculatedFill = activeLPs >= 9 ? 100.0 : parseFloat((95.0 + Math.random() * 4.9).toFixed(1));
+      const calculatedFill = activeLPs >= 9 ? 99.7 : parseFloat((95.0 + Math.random() * 4.5).toFixed(1));
 
       setTestResult({
         latency: parseFloat(calculatedLatency.toFixed(2)),
         slippage: randomSlippage,
         fillRate: calculatedFill,
-        status: activeLPs >= 6 ? "OPTIMAL" : activeLPs > 0 ? "DEGRADED" : "CRITICAL SHUTDOWN",
-        route: activeLPs >= 8 ? "Direct Memory Access (DMA)" : "Smart Request Router"
+        status: activeLPs >= 6 ? "OPTIMAL" : activeLPs > 0 ? "DEGRADED" : "NO FEEDS",
+        route: activeLPs > 0 ? "Smart order router · best of " + activeLPs : "—"
       });
       setTestStage(3);
-      addLog(`Execution diagnostic results printed: ${calculatedLatency.toFixed(2)}ms latency. slippage: ${randomSlippage} pips.`);
+      addLog(`Result: ${calculatedLatency.toFixed(2)}ms routing core · slippage ${randomSlippage} · fill ${calculatedFill}%.`);
     }, 2200);
   };
 
@@ -743,6 +736,11 @@ export default function App() {
     }
 
     setFormIsSubmitting(true);
+    const payload = {
+      ...leadInputs,
+      event: "iFX EXPO Cyprus 2026 · Booth 76",
+      _subject: "New lead — iFX EXPO Cyprus 2026 (Booth 76)"
+    };
     const endpoint = config.formEndpoint || "";
     const isLocalDemo = !endpoint || endpoint.toLowerCase().includes("formspree_id");
     const isOfflineMode = typeof navigator !== "undefined" && !navigator.onLine;
@@ -750,13 +748,13 @@ export default function App() {
     if (isLocalDemo || isOfflineMode) {
       // Local mail fallback routine
       setTimeout(() => {
-        let textBody = `xSyphon Cyprus 2026 Kiosk Booth Registration:\n\n`;
-        textBody += `Contact Name: ${leadInputs.name}\n`;
-        textBody += `Institutional Company: ${leadInputs.company}\n`;
-        textBody += `Email Contact: ${leadInputs.email}\n`;
-        textBody += `Simulated Volume Level: ${leadInputs.volume}\n`;
-        textBody += `Message requirement: ${leadInputs.requirement || "NONE"}\n\n`;
-        textBody += `[Transmitted offline via interactive touch kiosk UI]`;
+        let textBody = `xSyphon — iFX EXPO Cyprus 2026 · Booth 76 lead:\n\n`;
+        textBody += `Name: ${leadInputs.name}\n`;
+        textBody += `Company: ${leadInputs.company}\n`;
+        textBody += `Email: ${leadInputs.email}\n`;
+        textBody += `Expected monthly volume: ${leadInputs.volume}\n`;
+        textBody += `Requirements: ${leadInputs.requirement || "—"}\n\n`;
+        textBody += `[Sent from the booth kiosk]`;
 
         const mailtoLink = `mailto:${config.fallbackEmail || "desk@xsyphon.com"}?subject=${encodeURIComponent("iFX EXPO Cyprus lead")}&body=${encodeURIComponent(textBody)}`;
         window.location.href = mailtoLink;
@@ -776,7 +774,7 @@ export default function App() {
     try {
       const resp = await fetch(endpoint, {
         method: "POST",
-        body: JSON.stringify(leadInputs),
+        body: JSON.stringify(payload),
         headers: {
           "Accept": "application/json",
           "Content-Type": "application/json"
@@ -801,7 +799,7 @@ export default function App() {
         type: "err",
         text: "Connectivity degraded. Activating offline protocol mail pipeline..."
       });
-      const mailtoLink = `mailto:${config.fallbackEmail || "desk@xsyphon.com"}?subject=${encodeURIComponent("iFX EXPO Cyprus backup lead")}&body=${encodeURIComponent(JSON.stringify(leadInputs))}`;
+      const mailtoLink = `mailto:${config.fallbackEmail || "desk@xsyphon.com"}?subject=${encodeURIComponent("iFX EXPO Cyprus 2026 lead (Booth 76)")}&body=${encodeURIComponent(JSON.stringify(payload, null, 2))}`;
       window.location.href = mailtoLink;
     } finally {
       setFormIsSubmitting(false);
@@ -824,9 +822,10 @@ export default function App() {
 
   const loadKioskBoilerplate = (mode: "expo-onsite" | "reset") => {
     if (mode === "expo-onsite") {
-      setTempEndpoint("https://formspree.io/f/xbjnqjpz");
-      setTempCalendly("https://calendly.com/xsyphon-liquidity/2026-cyprus");
-      setTempEmail("cyprus-desk@xsyphon.com");
+      // Replace these with your real links before the expo.
+      setTempEndpoint("");
+      setTempCalendly("https://calendly.com/your-name/cyprus-20min");
+      setTempEmail("desk@xsyphon.com");
     } else {
       setTempEndpoint("");
       setTempCalendly("");
@@ -913,24 +912,14 @@ export default function App() {
           <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#3ddc6c]/20 to-transparent" />
           
           <div className="flex items-center gap-3.5">
-            {/* Geometric Glowing Logo */}
-            <div className="h-11 w-11 relative flex items-center justify-center bg-slate-950 border border-[#3ddc6c]/35 rounded-xl shadow-lg shadow-[#3ddc6c]/5">
-              <svg className="w-7 h-7 text-[#3ddc6c]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8">
-                <path d="M4 4l16 16M20 4L4 20" strokeLinecap="round" />
-                <circle cx="12" cy="12" r="3.2" fill="#040608" stroke="currentColor" strokeWidth="2" />
-                <circle cx="4" cy="4" r="1.5" fill="#3ddc6c" className="animate-pulse" />
-                <circle cx="20" cy="20" r="1.5" fill="#3ddc6c" className="animate-pulse" />
-              </svg>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold font-display tracking-tight text-white">xSyphon</span>
-                <span className="px-2 py-0.5 text-[9px] uppercase font-mono font-bold tracking-widest bg-[#3ddc6c]/10 text-[#3ddc6c] border border-[#3ddc6c]/25 rounded">
-                  iFX CYPRUS 2026
-                </span>
-              </div>
+            {/* Real xSyphon wordmark (inverted to white on dark) */}
+            <img src="/xsyphon-logo.png" alt="xSyphon" className="h-7 md:h-8 w-auto invert brightness-200" />
+            <div className="flex flex-col gap-1 border-l border-slate-800 pl-3.5">
+              <span className="px-2 py-0.5 text-[9px] uppercase font-mono font-bold tracking-widest bg-[#3ddc6c]/10 text-[#3ddc6c] border border-[#3ddc6c]/25 rounded w-max">
+                iFX EXPO Cyprus · Booth 76
+              </span>
               <p className="text-[11px] text-slate-400 font-mono tracking-wider">
-                SYPHON OS CORE // INSTARS AGGREGATION &amp; DISCOVERY
+                Syphon OS · Liquidity Aggregation Engine
               </p>
             </div>
           </div>
@@ -960,8 +949,8 @@ export default function App() {
               <Settings className="w-4 h-4" />
             </button>
             <div className="flex flex-col text-right font-mono text-[10px] text-slate-500">
-              <div>Kiosk ID // #cy-0414</div>
-              <div className="text-[#3ddc6c] font-bold text-[9px] tracking-widest animate-pulse">● PROTOCOL ONLINE</div>
+              <div>iFX EXPO Cyprus // Booth 76</div>
+              <div className="text-[#3ddc6c] font-bold text-[9px] tracking-widest animate-pulse">● ENGINE ONLINE</div>
             </div>
           </div>
         </header>
@@ -972,30 +961,30 @@ export default function App() {
           <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
             <div className="space-y-1.5">
               <span className="text-[#3ddc6c] font-mono text-[10px] tracking-[0.25em] block uppercase font-bold">
-                Premium liquidity infrastructure
+                Institutional liquidity · AI-driven
               </span>
               <h2 className="text-xl md:text-2xl font-mono font-bold tracking-tight text-white">
                 {decodedTitle}
                 {isDecoding && <span className="animate-pulse ml-0.5 font-sans">|</span>}
               </h2>
               <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
-                Experience institutional FX &amp; metals aggregation with zero markup and direct, sub-millisecond execution. Bypass complex clearing channels and access primary liquidity through a single, secure gateway.
+                Institutional FX, precious metals and crypto-CFD liquidity aggregated from 12 tier-1 sources. Zero last look, 5ms execution, live in 5&ndash;10 days. One gateway to global liquidity.
               </p>
             </div>
 
             {/* Quick Stats on the screen styled as Glass Cards */}
             <div className="flex flex-wrap gap-2 md:shrink-0">
               <div className="glass-card px-4 py-2.5 rounded-xl border-slate-900/60 flex flex-col min-w-[100px]">
-                <span className="text-[10px] text-slate-400 font-mono">LIQUIDITY</span>
+                <span className="text-[10px] text-slate-400 font-mono">DAILY VOLUME</span>
                 <span className="text-lg font-bold font-mono text-white text-glow">$1B+</span>
               </div>
               <div className="glass-card px-4 py-2.5 rounded-xl border-slate-900/60 flex flex-col min-w-[100px]">
-                <span className="text-[10px] text-slate-400 font-mono">CHANNELS</span>
-                <span className="text-lg font-bold font-mono text-[#3ddc6c]">12 T-1</span>
+                <span className="text-[10px] text-slate-400 font-mono">TIER-1 LPs</span>
+                <span className="text-lg font-bold font-mono text-[#3ddc6c]">12</span>
               </div>
               <div className="glass-card px-4 py-2.5 rounded-xl border-slate-900/60 flex flex-col min-w-[100px]">
-                <span className="text-[10px] text-slate-400 font-mono">LATENCY</span>
-                <span className="text-lg font-bold font-mono text-white">~1.5ms</span>
+                <span className="text-[10px] text-slate-400 font-mono">EXECUTION</span>
+                <span className="text-lg font-bold font-mono text-white">5ms</span>
               </div>
             </div>
           </div>
@@ -1149,7 +1138,7 @@ export default function App() {
                     Aggregation Core Pipeline
                   </h3>
                   <span className="text-[10px] text-slate-400 font-mono">
-                    Realtime WebGL Network Frame Map
+                    Real-time aggregation &amp; routing map
                   </span>
                 </div>
 
@@ -1183,7 +1172,7 @@ export default function App() {
                   </div>
                   <div className="absolute bottom-3 left-3 pointer-events-none font-mono text-[9px] bg-emerald-950/40 border border-emerald-900/30 px-2' py-1 rounded text-[#3ddc6c] flex items-center gap-1.5 z-20">
                     <Zap className="w-2.5 h-2.5 text-[#3ddc6c] animate-bounce" />
-                    Direct Memory Core
+                    Aggregation core
                   </div>
 
                   {lps.filter(x => x.active).length === 0 && (
@@ -1191,7 +1180,7 @@ export default function App() {
                       <AlertTriangle className="w-9 h-9 text-rose-500 mb-2 animate-bounce" />
                       <h4 className="text-white font-mono font-bold text-xs uppercase tracking-widest text-shadow">No Feeds Connected</h4>
                       <p className="text-rose-300 font-mono text-[10px] max-w-[250px] mt-1.5 leading-relaxed">
-                        Toggle one or more Tier-1 institutional banks below to re-initiate aggregation pipelines.
+                        Toggle one or more tier-1 liquidity sources below to re-initiate aggregation.
                       </p>
                     </div>
                   )}
@@ -1200,8 +1189,8 @@ export default function App() {
                 {/* Multi bank activation toggles */}
                 <div>
                   <div className="text-[10px] font-mono text-slate-400 mb-2 flex justify-between items-center bg-slate-950/50 px-3 py-1.5 rounded-lg border border-slate-900/60">
-                    <span className="font-bold text-[#3ddc6c] uppercase">Interactive Banks cluster</span>
-                    <span>Toggle channels to filter liquidity pools</span>
+                    <span className="font-bold text-[#3ddc6c] uppercase">Tier-1 liquidity sources</span>
+                    <span>Toggle feeds to see the router re-aggregate</span>
                   </div>
 
                   <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
@@ -1277,7 +1266,7 @@ export default function App() {
             <div className="grid grid-cols-3 gap-2 bg-[#040608] border border-slate-900 rounded-2xl p-2">
               
               <div className="bg-black/60 p-3 rounded-xl border border-slate-900/60 flex flex-col items-center justify-center text-center">
-                <span className="text-[9px] uppercase font-mono tracking-widest text-[#3ddc6c] mb-1 block font-bold">Latency</span>
+                <span className="text-[9px] uppercase font-mono tracking-widest text-[#3ddc6c] mb-1 block font-bold">Core Routing</span>
                 <span className="text-sm font-bold tracking-tight text-white font-mono">
                   {statsLatency.toFixed(2)} ms
                 </span>
@@ -1286,7 +1275,7 @@ export default function App() {
               <div className="bg-black/60 p-3 rounded-xl border border-slate-900/60 flex flex-col items-center justify-center text-center">
                 <span className="text-[9px] uppercase font-mono tracking-widest text-slate-400 mb-1 block font-bold">Aggregated</span>
                 <span className="text-sm font-bold tracking-tight text-[#3ddc6c] font-mono">
-                  {lps.filter(x => x.active).length} Banks
+                  {lps.filter(x => x.active).length} LPs
                 </span>
               </div>
 
@@ -1311,21 +1300,21 @@ export default function App() {
               </div>
 
               <h4 className="text-sm font-mono font-bold text-white tracking-widest uppercase mb-1">
-                XAU/CNH Liquidity Vault
+                XAU/CNH — Gold vs Offshore RMB
               </h4>
               <p className="text-[11px] text-amber-200/85 mb-3 leading-relaxed">
-                Unlock competitive cross-hedging spreads. Discover rare Chinese Renminbi bullion pairing with zero last-look constraints under Syphon Smart Routing patterns.
+                Rare streaming gold liquidity against the offshore yuan, with institutional STP execution from 50&nbsp;g and zero last look. A direct edge for Asian institutional flow.
               </p>
 
-              {/* Golden Mini Specifications Box */}
+              {/* Golden Mini Specifications Box (published specs) */}
               <div className="grid grid-cols-2 gap-2 text-[10px] font-mono text-amber-100/90">
                 <div className="bg-amber-950/20 px-2.5 py-1.5 rounded border border-amber-500/10">
-                  <span className="text-slate-400 block text-[9px] uppercase">Spread Spec:</span>
-                  <span className="font-bold text-amber-400">0.12 Pips Flat</span>
+                  <span className="text-slate-400 block text-[9px] uppercase">Min size:</span>
+                  <span className="font-bold text-amber-400">50 g · 1 g step</span>
                 </div>
                 <div className="bg-amber-950/20 px-2.5 py-1.5 rounded border border-amber-500/10">
-                  <span className="text-slate-400 block text-[9px] uppercase">Execution Level:</span>
-                  <span className="font-bold text-amber-300">100% DMA Fill</span>
+                  <span className="text-slate-400 block text-[9px] uppercase">Hours · Exec:</span>
+                  <span className="font-bold text-amber-300">24/5 · STP</span>
                 </div>
               </div>
             </div>
@@ -1533,19 +1522,26 @@ export default function App() {
                 )}
               </div>
 
-              {/* Book meeting call to action */}
-              {config.calendlyUrl && (
-                <div className="mt-3 pt-3 border-t border-slate-950/60">
+              {/* Book meeting + save contact */}
+              <div className="mt-3 pt-3 border-t border-slate-950/60 flex flex-col gap-2">
+                {config.calendlyUrl && (
                   <a
                     href={config.calendlyUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-center font-mono text-[10px] text-amber-400 hover:text-amber-300 font-bold tracking-wider block hover:underline"
+                    className="text-center font-mono text-[10px] text-[#3ddc6c] hover:text-emerald-300 font-bold tracking-wider block hover:underline"
                   >
-                    📅 OR SCHEDULE PRIVATE DISCUSSIONS AT BOOTH →
+                    📅 Book a meeting at the booth →
                   </a>
-                </div>
-              )}
+                )}
+                <a
+                  href="/xsyphon.vcf"
+                  download
+                  className="text-center font-mono text-[10px] text-slate-400 hover:text-white font-bold tracking-wider block hover:underline"
+                >
+                  💾 Save our contact (vCard)
+                </a>
+              </div>
             </div>
 
           </section>
@@ -1556,11 +1552,13 @@ export default function App() {
 
       {/* FOOTER */}
       <footer className="w-full py-4 text-center text-[10px] font-mono text-slate-600 bg-black/35 border-t border-slate-950/80 mt-4">
-        <div>
-          xSyphon © 2026. Custom Institutional Liquidity Widget for iPad/Booth Kiosk operations.
+        <div className="text-slate-400">
+          xSyphon Ltd · FSC Mauritius License No. GB25204632 · MiFID II / UK FCA frameworks · © 2026
         </div>
-        <div className="text-[9px] mt-1 text-slate-500">
-          All live streams and pricing data generated in high fidelity simulation representing global liquidity vaults.
+        <div className="text-[9px] mt-1 text-slate-500 max-w-3xl mx-auto leading-relaxed">
+          For institutional and professional clients only. Trading involves risk. Live prices, engine metrics and the speed
+          test on this kiosk are illustrative client-side simulations, not a live market feed. Explore the full platform at
+          <a href="https://xsyphon.com" target="_blank" rel="noopener noreferrer" className="text-[#3ddc6c] hover:underline"> xsyphon.com</a>.
         </div>
       </footer>
 
