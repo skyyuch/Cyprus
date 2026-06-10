@@ -313,10 +313,13 @@ export default function App() {
   const simSpeedRef = useRef<number>(simSpeed);
   const spawnIntensityRef = useRef<number>(spawnIntensity);
   const activeCountRef = useRef<number>(12);
+  // Marks the cached static layer (grids/rails/nodes/labels) as needing a redraw.
+  const staticDirtyRef = useRef<boolean>(true);
 
   useEffect(() => {
     lpsRef.current = lps;
     activeCountRef.current = lps.filter(x => x.active).length;
+    staticDirtyRef.current = true;
   }, [lps]);
 
   useEffect(() => {
@@ -371,14 +374,22 @@ export default function App() {
     return () => clearInterval(interval);
   }, [reducedMotion, spawnIntensity, selectedSym]);
 
-  // Core Canvas renderer loop
+  // Core Canvas renderer loop.
+  // Perf: the static scene (grids, LP rails, nodes, labels, base line, client node)
+  // is rendered once onto an offscreen canvas and only redrawn on resize / LP toggle /
+  // symbol change. Each animation frame just blits that bitmap and draws the moving
+  // particles + the pulsing core glow — keeping per-frame work tiny.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const bg = document.createElement("canvas");
+    const bgCtx = bg.getContext("2d");
+    if (!bgCtx) return;
+
+    let dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     let W = canvas.clientWidth;
     let H = canvas.clientHeight;
     let coreX = W * 0.58;
@@ -387,131 +398,152 @@ export default function App() {
     let clientY = H * 0.5;
     let corePulse = 0;
 
+    const isGoldSelected = selectedSym.includes("XAU");
+
     const resize = () => {
       if (!canvas) return;
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       W = canvas.clientWidth;
       H = canvas.clientHeight;
       canvas.width = W * dpr;
       canvas.height = H * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      bg.width = W * dpr;
+      bg.height = H * dpr;
+      bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       coreX = W * 0.58;
       coreY = H * 0.5;
       clientX = W * 0.91;
       clientY = H * 0.5;
+      staticDirtyRef.current = true;
+    };
+
+    // Draw the static scene (only when something structural changes).
+    const drawStatic = () => {
+      const c = bgCtx;
+      c.clearRect(0, 0, W, H);
+      const activeBanks = lpsRef.current;
+
+      // Dot-matrix background
+      c.fillStyle = isGoldSelected ? "rgba(212, 175, 55, 0.02)" : "rgba(61, 220, 108, 0.02)";
+      const dotSpacing = 16;
+      for (let x = dotSpacing; x < W; x += dotSpacing) {
+        for (let y = dotSpacing; y < H; y += dotSpacing) {
+          if ((x + y) % (dotSpacing * 4) === 0) c.fillRect(x - 0.75, y - 0.75, 1.5, 1.5);
+        }
+      }
+
+      // Coordinate guide grid
+      c.strokeStyle = isGoldSelected ? "rgba(212, 175, 55, 0.012)" : "rgba(61, 220, 108, 0.012)";
+      c.lineWidth = 0.5;
+      c.beginPath();
+      for (let x = 32; x < W; x += 64) { c.moveTo(x, 0); c.lineTo(x, H); }
+      for (let y = 32; y < H; y += 64) { c.moveTo(0, y); c.lineTo(W, y); }
+      c.stroke();
+
+      // LP rails
+      activeBanks.forEach((lp, i) => {
+        const t = activeBanks.length === 1 ? 0.5 : i / (activeBanks.length - 1);
+        const yCoord = H * 0.12 + t * H * 0.76;
+        const xCoord = W * 0.08;
+        c.lineWidth = 0.8;
+        c.strokeStyle = lp.active
+          ? (isGoldSelected ? "rgba(212, 175, 55, 0.035)" : "rgba(61, 220, 108, 0.035)")
+          : "rgba(244, 63, 94, 0.01)";
+        c.beginPath();
+        c.moveTo(xCoord, yCoord);
+        c.lineTo(coreX, coreY);
+        c.stroke();
+      });
+
+      // Base core -> client pipeline line
+      const activeCount = activeBanks.filter(x => x.active).length;
+      if (activeCount > 0) {
+        c.strokeStyle = isGoldSelected ? "rgba(212, 175, 55, 0.08)" : "rgba(61, 220, 108, 0.08)";
+        c.lineWidth = 1.0;
+      } else {
+        c.strokeStyle = "rgba(244, 63, 94, 0.05)";
+        c.lineWidth = 0.8;
+      }
+      c.beginPath();
+      c.moveTo(coreX, coreY);
+      c.lineTo(clientX, clientY);
+      c.stroke();
+
+      // LP nodes + labels
+      activeBanks.forEach((lp, i) => {
+        const t = activeBanks.length === 1 ? 0.5 : i / (activeBanks.length - 1);
+        const yCoord = H * 0.12 + t * H * 0.76;
+        const xCoord = W * 0.08;
+        c.fillStyle = "#04070a";
+        if (lp.active) {
+          c.strokeStyle = isGoldSelected ? "rgba(212, 175, 55, 0.8)" : "rgba(61, 220, 108, 0.85)";
+          c.lineWidth = 1.35;
+          c.beginPath();
+          c.arc(xCoord, yCoord, 4, 0, Math.PI * 2);
+          c.fill();
+          c.stroke();
+          c.fillStyle = "rgba(180, 205, 190, 0.85)";
+          c.font = "bold 9px ui-monospace, SFMono-Regular, Consolas, monospace";
+          c.textAlign = "right";
+          c.textBaseline = "alphabetic";
+          c.fillText(lp.name, xCoord - 10, yCoord + 3.2);
+        } else {
+          c.strokeStyle = "rgba(244, 63, 94, 0.3)";
+          c.lineWidth = 1;
+          c.beginPath();
+          c.arc(xCoord, yCoord, 3, 0, Math.PI * 2);
+          c.fill();
+          c.stroke();
+          c.fillStyle = "rgba(244, 63, 94, 0.35)";
+          c.font = "8px ui-monospace, SFMono-Regular, Consolas, monospace";
+          c.textBaseline = "middle";
+          c.textAlign = "right";
+          c.fillText(lp.name, xCoord - 8, yCoord);
+        }
+      });
+
+      // Client "YOU" node (static)
+      c.fillStyle = "#020406";
+      if (activeCount > 0) {
+        c.strokeStyle = isGoldSelected ? "rgba(212, 175, 55, 0.85)" : "rgba(61, 220, 108, 0.9)";
+        c.lineWidth = 1.8;
+      } else {
+        c.strokeStyle = "rgba(244, 63, 94, 0.4)";
+        c.lineWidth = 1.0;
+      }
+      c.beginPath();
+      c.arc(clientX, clientY, 12, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
+      c.fillStyle = activeCount > 0 ? "#ffffff" : "rgba(244, 63, 94, 0.7)";
+      c.font = "bold 8px ui-monospace, monospace";
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.fillText("YOU", clientX, clientY);
     };
 
     resize();
     window.addEventListener("resize", resize);
 
     const render = () => {
-      // Clear black background
+      if (staticDirtyRef.current) {
+        drawStatic();
+        staticDirtyRef.current = false;
+      }
+
       ctx.clearRect(0, 0, W, H);
+      ctx.drawImage(bg, 0, 0, W, H);
 
-      const activeBanks = lpsRef.current;
-      const isGoldSelected = selectedSym.includes("XAU");
-
-      // 1. Draw subtle dot-matrix background grid for precise quantitative feel
-      ctx.fillStyle = isGoldSelected ? "rgba(212, 175, 55, 0.02)" : "rgba(61, 220, 108, 0.02)";
-      const dotSpacing = 16;
-      for (let x = dotSpacing; x < W; x += dotSpacing) {
-        for (let y = dotSpacing; y < H; y += dotSpacing) {
-          if ((x + y) % (dotSpacing * 4) === 0) {
-            ctx.fillRect(x - 0.75, y - 0.75, 1.5, 1.5);
-          }
-        }
-      }
-
-      // 2. Draw modern high-precision coordinate guide grids
-      ctx.strokeStyle = isGoldSelected ? "rgba(212, 175, 55, 0.012)" : "rgba(61, 220, 108, 0.012)";
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      for (let x = 32; x < W; x += 64) {
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, H);
-      }
-      for (let y = 32; y < H; y += 64) {
-        ctx.moveTo(0, y);
-        ctx.lineTo(W, y);
-      }
-      ctx.stroke();
-
-      // LP to core connection lines (Thin dimmer rail lines)
-      activeBanks.forEach((lp, i) => {
-        const t = activeBanks.length === 1 ? 0.5 : i / (activeBanks.length - 1);
-        const yCoord = H * 0.12 + t * H * 0.76;
-        const xCoord = W * 0.08;
-
-        ctx.lineWidth = 0.8;
-        if (lp.active) {
-          ctx.strokeStyle = isGoldSelected ? "rgba(212, 175, 55, 0.035)" : "rgba(61, 220, 108, 0.035)";
-        } else {
-          ctx.strokeStyle = "rgba(244, 63, 94, 0.01)";
-        }
-        ctx.beginPath();
-        ctx.moveTo(xCoord, yCoord);
-        ctx.lineTo(coreX, coreY);
-        ctx.stroke();
-      });
-
-      // Core to Client pipeline stream line (Dim underlying track, always Glowing)
       const currentActiveCount = activeCountRef.current;
-      if (currentActiveCount > 0) {
-        ctx.strokeStyle = isGoldSelected ? "rgba(212, 175, 55, 0.08)" : "rgba(61, 220, 108, 0.08)";
-        ctx.lineWidth = 1.0;
-      } else {
-        ctx.strokeStyle = "rgba(244, 63, 94, 0.05)";
-        ctx.lineWidth = 0.8;
-      }
-      ctx.beginPath();
-      ctx.moveTo(coreX, coreY);
-      ctx.lineTo(clientX, clientY);
-      ctx.stroke();
 
-      // Draw LP nodes on the left side
-      activeBanks.forEach((lp, i) => {
-        const t = activeBanks.length === 1 ? 0.5 : i / (activeBanks.length - 1);
-        const yCoord = H * 0.12 + t * H * 0.76;
-        const xCoord = W * 0.08;
-
-        ctx.fillStyle = "#04070a";
-        if (lp.active) {
-          ctx.strokeStyle = isGoldSelected ? "rgba(212, 175, 55, 0.8)" : "rgba(61, 220, 108, 0.85)";
-          ctx.lineWidth = 1.35;
-          ctx.beginPath();
-          ctx.arc(xCoord, yCoord, 4, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-
-          // Render bank label with crisp styling
-          ctx.fillStyle = "rgba(180, 205, 190, 0.85)";
-          ctx.font = "bold 9px ui-monospace, SFMono-Regular, Consolas, monospace";
-          ctx.textAlign = "right";
-          ctx.fillText(lp.name, xCoord - 10, yCoord + 3.2);
-        } else {
-          ctx.strokeStyle = "rgba(244, 63, 94, 0.3)";
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.arc(xCoord, yCoord, 3, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-
-          ctx.fillStyle = "rgba(244, 63, 94, 0.35)";
-          ctx.font = "8px ui-monospace, SFMono-Regular, Consolas, monospace";
-          ctx.textBaseline = "middle";
-          ctx.textAlign = "right";
-          ctx.fillText(lp.name, xCoord - 8, yCoord);
-        }
-      });
-
-      // Render flowing particles with high-speed gradient trailing laser beams
+      // Flowing particles with gradient trails
       const particles = particlesRef.current;
       for (let k = particles.length - 1; k >= 0; k--) {
         const p = particles[k];
 
-        // Terminate particle path if source LP is toggled active -> inactive
-        const bankCheck = activeBanks.find(x => x.name === p.srcLP);
+        const bankCheck = lpsRef.current.find(x => x.name === p.srcLP);
         if (p.stage === 0 && (!bankCheck || !bankCheck.active)) {
           particles.splice(k, 1);
           continue;
@@ -519,12 +551,9 @@ export default function App() {
 
         p.t += p.sp * simSpeedRef.current;
 
-        // Custom cubic-bezier easing to emulate exponential speed rocket launch:
-        // stage 0 (lp to core): ultra speed-up as it approaches core
-        // stage 1 (core to client): fast shooting leap
-        const easedT = p.stage === 0 
-          ? Math.pow(p.t, 2.2) // ease-in feel
-          : 1 - Math.pow(1 - p.t, 2.5); // ease-out snap leap
+        const easedT = p.stage === 0
+          ? Math.pow(p.t, 2.2)
+          : 1 - Math.pow(1 - p.t, 2.5);
 
         const currentX = p.x + (p.tx - p.x) * easedT;
         const currentY = p.y + (p.ty - p.y) * easedT;
@@ -537,8 +566,8 @@ export default function App() {
             p.tx = clientX;
             p.ty = clientY;
             p.t = 0;
-            p.sp = 0.035 * simSpeedRef.current; // even faster projection
-            corePulse = 1.3; // increase glow pulse on impact
+            p.sp = 0.035 * simSpeedRef.current;
+            corePulse = 1.3;
           } else {
             particles.splice(k, 1);
             continue;
@@ -547,19 +576,15 @@ export default function App() {
 
         const alpha = 0.6 + 0.4 * Math.sin(p.t * Math.PI);
 
-        // Draw elegant high-precision trail lines
-        const segments = 8;
+        const segments = 5;
         for (let i = segments; i >= 1; i--) {
           const ratio = i / segments;
           const trailT = Math.max(0, p.t - ratio * 0.16);
-
-          const trailEasedT = p.stage === 0 
-            ? Math.pow(trailT, 2.2) 
+          const trailEasedT = p.stage === 0
+            ? Math.pow(trailT, 2.2)
             : 1 - Math.pow(1 - trailT, 2.5);
-
           const trailX = p.x + (p.tx - p.x) * trailEasedT;
           const trailY = p.y + (p.ty - p.y) * trailEasedT;
-
           ctx.beginPath();
           ctx.moveTo(currentX, currentY);
           ctx.lineTo(trailX, trailY);
@@ -568,33 +593,28 @@ export default function App() {
           ctx.stroke();
         }
 
-        // Star core point (White focus point)
         ctx.fillStyle = "#ffffff";
         ctx.beginPath();
         ctx.arc(currentX, currentY, p.stage === 1 ? 1.8 : 1.2, 0, Math.PI * 2);
         ctx.fill();
 
-        // Main particle envelope glow
         ctx.fillStyle = p.c + alpha + ")";
         ctx.beginPath();
         ctx.arc(currentX, currentY, p.stage === 1 ? 3.5 : 2.5, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // Render CORE "Syphon OS" central hub node with high-precision glowing structure
+      // Core glow (pulses on particle impact)
       corePulse *= 0.93;
       const coreRadius = 15 + corePulse * 8;
       const coreGrad = ctx.createRadialGradient(coreX, coreY, 2, coreX, coreY, coreRadius + 26);
-
       if (currentActiveCount > 0) {
         if (isGoldSelected) {
-          // Inner bright light, fading to amber gold
           coreGrad.addColorStop(0, "rgba(255, 255, 255, 1.0)");
           coreGrad.addColorStop(0.2, "rgba(255, 246, 212, 0.95)");
           coreGrad.addColorStop(0.5, "rgba(212, 175, 55, 0.5)");
           coreGrad.addColorStop(1, "rgba(212, 175, 55, 0)");
         } else {
-          // Inner bright light, fading to brand neon green
           coreGrad.addColorStop(0, "rgba(255, 255, 255, 1.0)");
           coreGrad.addColorStop(0.2, "rgba(180, 255, 203, 0.95)");
           coreGrad.addColorStop(0.5, "rgba(61, 220, 108, 0.5)");
@@ -605,14 +625,11 @@ export default function App() {
         coreGrad.addColorStop(0.3, "rgba(244, 63, 94, 0.6)");
         coreGrad.addColorStop(1, "rgba(244, 63, 94, 0)");
       }
-
-      // Draw multi-layered outer glow ring
       ctx.fillStyle = coreGrad;
       ctx.beginPath();
       ctx.arc(coreX, coreY, coreRadius + 26, 0, Math.PI * 2);
       ctx.fill();
 
-      // Double laser-radius ring
       if (currentActiveCount > 0) {
         ctx.strokeStyle = isGoldSelected ? "rgba(212, 175, 55, 0.25)" : "rgba(61, 220, 108, 0.25)";
         ctx.lineWidth = 1.0;
@@ -621,7 +638,7 @@ export default function App() {
         ctx.stroke();
       }
 
-      // Apply canvas drop-shadow effect specifically on center disc
+      // Core disc + symbol (drawn above the glow)
       ctx.save();
       if (currentActiveCount > 0) {
         ctx.shadowColor = isGoldSelected ? "rgba(212, 175, 55, 1.0)" : "rgba(61, 220, 108, 1.0)";
@@ -630,8 +647,6 @@ export default function App() {
         ctx.shadowColor = "rgba(244, 63, 94, 1.0)";
         ctx.shadowBlur = 8;
       }
-
-      // Solid central core card back
       ctx.fillStyle = "#030609";
       if (currentActiveCount > 0) {
         ctx.strokeStyle = isGoldSelected ? "#d4af37" : "#5ce880";
@@ -640,45 +655,21 @@ export default function App() {
         ctx.strokeStyle = "rgba(244, 63, 94, 0.95)";
         ctx.lineWidth = 1.5;
       }
-
       ctx.beginPath();
       ctx.arc(coreX, coreY, 13.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      ctx.restore(); // Restore shadow setting right away so it doesn't affect other text
+      ctx.restore();
 
-      // "X" core symbol inside Central Spot with white-to-green crisp text
       ctx.fillStyle = currentActiveCount > 0 ? "#ffffff" : "#f43f5e";
       ctx.font = "bold 12px ui-monospace, SFMono-Regular, Consolas, monospace";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("X", coreX, coreY);
 
-      // Labeling aggregate info inside canvas
       ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
       ctx.font = "bold 9px ui-monospace, SFMono-Regular, monospace";
       ctx.fillText("SyphonOS Core", coreX, coreY - 24);
-
-      // Render CLIENT "YOU" Node
-      ctx.fillStyle = "#020406";
-      if (currentActiveCount > 0) {
-        ctx.strokeStyle = isGoldSelected ? "rgba(212, 175, 55, 0.85)" : "rgba(61, 220, 108, 0.9)";
-        ctx.lineWidth = 1.8;
-      } else {
-        ctx.strokeStyle = "rgba(244, 63, 94, 0.4)";
-        ctx.lineWidth = 1.0;
-      }
-
-      ctx.beginPath();
-      ctx.arc(clientX, clientY, 12, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = currentActiveCount > 0 ? "#ffffff" : "rgba(244, 63, 94, 0.7)";
-      ctx.font = "bold 8px ui-monospace, monospace";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("YOU", clientX, clientY);
 
       animationFrameId.current = requestAnimationFrame(render);
     };
@@ -901,8 +892,8 @@ export default function App() {
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#090d13_1px,transparent_1px),linear-gradient(to_bottom,#090d13_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-35 pointer-events-none" />
       
       {/* Premium glowing background lights */}
-      <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-[#3ddc6c]/6 rounded-full blur-[130px] pointer-events-none" />
-      <div className="absolute bottom-1/4 left-1/4 w-[400px] h-[400px] bg-yellow-500/3 rounded-full blur-[110px] pointer-events-none" />
+      <div className="absolute top-0 right-1/4 w-[420px] h-[420px] bg-[#3ddc6c]/6 rounded-full blur-[90px] pointer-events-none" />
+      <div className="absolute bottom-1/4 left-1/4 w-[340px] h-[340px] bg-yellow-500/3 rounded-full blur-[80px] pointer-events-none" />
 
       {/* Main Structural Wrapper */}
       <div id="mainInterface" className="w-full max-w-[1530px] mx-auto px-4 py-3 flex-1 flex flex-col justify-between gap-3.5">
@@ -1144,24 +1135,12 @@ export default function App() {
 
                 {/* Aggregator HTML5 Canvas component with 3D Holographic Perspective */}
                 <div 
-                  className="relative w-full aspect-[4/3.1] bg-[#05070a]/95 border border-slate-900/90 rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center group mb-4 transition-all duration-500 hover:border-[#3ddc6c]/25"
-                  style={{ 
-                    perspective: "1200px",
-                    transformStyle: "preserve-3d"
-                  }}
+                  className="relative w-full aspect-[4/3.1] bg-[#05070a]/95 border border-slate-900/90 rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center group mb-4 transition-colors duration-500 hover:border-[#3ddc6c]/25"
                 >
-                  <div 
-                    className="absolute inset-0 w-full h-full transition-all duration-700 ease-out"
-                    style={{
-                      transform: "rotateY(-10deg) rotateX(5deg) scale(0.98) translateZ(0)",
-                      transformStyle: "preserve-3d"
-                    }}
-                  >
-                    <canvas
-                      ref={canvasRef}
-                      className="absolute inset-0 w-full h-full cursor-crosshair block z-10"
-                    />
-                  </div>
+                  <canvas
+                    ref={canvasRef}
+                    className="absolute inset-0 w-full h-full cursor-crosshair block z-10"
+                  />
                   
                   {/* Floating Labels */}
                   <div className="absolute top-3 left-3 pointer-events-none font-mono text-[9px] bg-slate-950/80 border border-slate-900/50 px-2 py-0.5 rounded text-slate-400 z-20">
