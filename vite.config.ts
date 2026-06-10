@@ -2,44 +2,10 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
-import {VitePWA} from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
-    plugins: [
-      react(),
-      tailwindcss(),
-      VitePWA({
-        registerType: 'autoUpdate',
-        includeAssets: ['xsyphon-logo.png', 'xsyphon.vcf'],
-        manifest: {
-          name: 'xSyphon — Institutional Liquidity',
-          short_name: 'xSyphon',
-          description: 'AI-driven institutional liquidity. Live at iFX EXPO Cyprus 2026, Booth 76.',
-          theme_color: '#040608',
-          background_color: '#040608',
-          display: 'standalone',
-          orientation: 'any',
-          start_url: '/',
-          icons: [{src: '/xsyphon-logo.png', sizes: '1024x300', type: 'image/png', purpose: 'any'}],
-        },
-        workbox: {
-          globPatterns: ['**/*.{js,css,html,png,svg,woff,woff2}'],
-          // Cache Google Fonts at runtime so the kiosk works offline after first load.
-          runtimeCaching: [
-            {
-              urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'google-fonts',
-                expiration: {maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365},
-                cacheableResponse: {statuses: [0, 200]},
-              },
-            },
-          ],
-        },
-      }),
-    ],
+    plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
