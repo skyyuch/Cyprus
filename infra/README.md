@@ -4,9 +4,12 @@ Deploys the booth microsite to AWS:
 
 - **S3** (private) holds the built static site (`dist/`).
 - **CloudFront** serves it over HTTPS (Origin Access Control).
-- **Lambda** implements `POST /api/agent` (the Claude proxy). It's reachable only
-  through CloudFront (Function URL with IAM auth + OAC), and holds
-  `ANTHROPIC_API_KEY` as an env var — the key never reaches the browser.
+- **Lambda** implements `POST /api/agent` (the Claude proxy). Its public Function
+  URL (`authType: NONE`) is gated by a secret header that CloudFront injects, so
+  only requests proxied through CloudFront are accepted (direct hits get `403`).
+  It holds `ANTHROPIC_API_KEY` as an env var — the key never reaches the browser.
+  Set `ORIGIN_SECRET` at deploy time to keep the secret stable across deploys;
+  otherwise a new one is generated each `cdk deploy`.
 
 Default region: `ap-southeast-1` (override with `CDK_DEFAULT_REGION`).
 

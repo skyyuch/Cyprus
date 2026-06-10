@@ -11,6 +11,7 @@
  */
 
 import * as path from "path";
+import { randomUUID } from "crypto";
 import {
   Stack,
   StackProps,
@@ -39,6 +40,11 @@ export class CyprusStack extends Stack {
     }
     const anthropicModel = process.env.ANTHROPIC_MODEL;
 
+    // Shared secret so the Lambda only answers requests coming through CloudFront
+    // (CloudFront injects it as a custom origin header; the public Function URL is
+    // otherwise unguessable). Set ORIGIN_SECRET to keep it stable across deploys.
+    const originSecret = process.env.ORIGIN_SECRET || randomUUID();
+
     // --- Static site bucket (private; CloudFront-only access via OAC) ---
     const siteBucket = new s3.Bucket(this, "SiteBucket", {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -57,6 +63,7 @@ export class CyprusStack extends Stack {
       memorySize: 256,
       environment: {
         ANTHROPIC_API_KEY: anthropicKey,
+        ORIGIN_SECRET: originSecret,
         ...(anthropicModel ? { ANTHROPIC_MODEL: anthropicModel } : {}),
       },
       bundling: {
@@ -66,9 +73,10 @@ export class CyprusStack extends Stack {
       },
     });
 
-    // IAM-auth Function URL; CloudFront signs requests via OAC.
+    // Public Function URL gated by the shared secret header injected by CloudFront
+    // (OAC+IAM signing breaks on POST bodies, so we use NONE + a secret instead).
     const agentUrl = agentFn.addFunctionUrl({
-      authType: lambda.FunctionUrlAuthType.AWS_IAM,
+      authType: lambda.FunctionUrlAuthType.NONE,
     });
 
     // --- CloudFront distribution ---
@@ -84,10 +92,13 @@ export class CyprusStack extends Stack {
       },
       additionalBehaviors: {
         "/api/agent": {
-          origin: origins.FunctionUrlOrigin.withOriginAccessControl(agentUrl),
+          origin: new origins.FunctionUrlOrigin(agentUrl, {
+            customHeaders: { "x-origin-secret": originSecret },
+          }),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          // Forward the body + content-type but not Host (Function URL validates Host).
           originRequestPolicy:
             cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
         },

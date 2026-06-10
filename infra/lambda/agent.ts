@@ -16,6 +16,7 @@ import { callLlm, type AgentRequestBody } from "../../functions/_lib/anthropic";
 
 interface FunctionUrlEvent {
   requestContext?: { http?: { method?: string } };
+  headers?: Record<string, string | undefined>;
   body?: string;
   isBase64Encoded?: boolean;
 }
@@ -35,6 +36,13 @@ function reply(statusCode: number, payload: unknown): LambdaResponse {
 }
 
 export async function handler(event: FunctionUrlEvent): Promise<LambdaResponse> {
+  // Only accept requests proxied by CloudFront (which injects the shared secret).
+  const expectedSecret = process.env.ORIGIN_SECRET;
+  if (expectedSecret) {
+    const got = event.headers?.["x-origin-secret"];
+    if (got !== expectedSecret) return reply(403, { error: "Forbidden." });
+  }
+
   const method = event?.requestContext?.http?.method;
   if (method && method !== "POST") {
     return reply(405, { error: "Method not allowed. Use POST." });
