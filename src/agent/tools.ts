@@ -194,30 +194,36 @@ export function lpQuotesFor(sym: string, mid: number): LpQuote[] {
   if (!spec || !mid) return [];
   const baseSpreadPrice = spec.baseSpreadTicks * tickSize(sym);
   const pip = pipSize(sym);
-  return lps.map((lp) => {
-    const spreadPrice = baseSpreadPrice * lp.spreadBias * specialtyFactor(lp, sym);
+  // Continuous, per-LP wobble so spreads/latency/fill "breathe" like a live book.
+  // Smooth (sine-based) and deterministic-in-time, so it never jumps wildly but
+  // also never sits still. Each LP has its own phase so the ranking reshuffles.
+  const t = Date.now() / 1000;
+  return lps.map((lp, i) => {
+    const phase = i * 0.7 + 1;
+    const spreadWobble =
+      1 + 0.2 * Math.sin(t * 0.9 + phase) + 0.06 * Math.sin(t * 2.7 + phase * 1.9);
+    const latWobble = 1 + 0.25 * Math.sin(t * 1.3 + phase * 1.3);
+    const fillWobble = 0.008 * Math.sin(t * 0.55 + phase * 0.7);
+
+    const spreadPrice = baseSpreadPrice * lp.spreadBias * specialtyFactor(lp, sym) * spreadWobble;
     const bid = round(sym, mid - spreadPrice / 2);
     const ask = round(sym, mid + spreadPrice / 2);
-    const spreadPips = parseFloat(((ask - bid) / pip).toFixed(2));
+    // Derive pips from the unrounded spread so sub-tick variation stays visible
+    // (rounding bid/ask would otherwise snap tight FX spreads to whole ticks).
+    const spreadPips = parseFloat(Math.max(0.01, spreadPrice / pip).toFixed(2));
+    const latencyMs = parseFloat(Math.max(0.6, lp.latencyMs * latWobble).toFixed(1));
+    const fillRate = parseFloat(Math.min(0.999, Math.max(0.9, lp.fillRate + fillWobble)).toFixed(4));
+
     // Liquidity score: tighter spread + higher fill + lower latency + reliability.
     const liquidityScore = parseFloat(
       (
         (1 / Math.max(spreadPips, 0.01)) * 4 +
-        lp.fillRate * 40 +
-        (1 / Math.max(lp.latencyMs, 0.5)) * 6 +
+        fillRate * 40 +
+        (1 / Math.max(latencyMs, 0.5)) * 6 +
         lp.reliability * 20
       ).toFixed(2),
     );
-    return {
-      id: lp.id,
-      tier: lp.tier,
-      bid,
-      ask,
-      spreadPips,
-      latencyMs: lp.latencyMs,
-      fillRate: lp.fillRate,
-      liquidityScore,
-    };
+    return { id: lp.id, tier: lp.tier, bid, ask, spreadPips, latencyMs, fillRate, liquidityScore };
   });
 }
 

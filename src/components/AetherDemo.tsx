@@ -10,7 +10,7 @@
  * prices are the real live guest feed.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Sparkles,
   X,
@@ -324,15 +324,19 @@ function Dashboard({
   snapshot: SimSnapshot;
   onSelectSym: (s: string) => void;
 }) {
-  const mid = useMemo(() => {
-    const ins = instruments.find((i) => i.sym === activeSym);
-    return ins && ins.px ? ins.px : SYMBOL_SPECS[activeSym]?.refMid || 0;
-  }, [instruments, activeSym]);
+  // Repaint ~1x/sec so the live quote wobble shows even when mids are static
+  // (e.g. market closed); throttled to stay well under the tick firehose rate.
+  const [, force] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => force((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
 
-  const ranked = useMemo(
-    () => lpQuotesFor(activeSym, mid).sort((a, b) => b.liquidityScore - a.liquidityScore).slice(0, 5),
-    [activeSym, mid],
-  );
+  const ins = instruments.find((i) => i.sym === activeSym);
+  const mid = ins && ins.px ? ins.px : SYMBOL_SPECS[activeSym]?.refMid || 0;
+  const ranked = lpQuotesFor(activeSym, mid)
+    .sort((a, b) => b.liquidityScore - a.liquidityScore)
+    .slice(0, 5);
 
   const { params, risk } = snapshot;
   const symNop = risk.nop[activeSym] ?? 0;
