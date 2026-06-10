@@ -222,6 +222,118 @@ function EmptyState({ onPick }: { onPick: (s: string) => void }) {
   );
 }
 
+// --- Minimal, safe markdown rendering (no dangerouslySetInnerHTML) ---
+// Handles **bold**, *italic* / _italic_, `code`, bullet/numbered lists,
+// paragraphs and single line breaks. The agent only emits this subset.
+const INLINE_RE = /(\*\*([^*]+)\*\*|\*([^*\n]+)\*|_([^_\n]+)_|`([^`]+)`)/g;
+
+function renderInline(text: string, kp: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  let last = 0;
+  let i = 0;
+  let m: RegExpExecArray | null;
+  INLINE_RE.lastIndex = 0;
+  while ((m = INLINE_RE.exec(text)) !== null) {
+    if (m.index > last) nodes.push(text.slice(last, m.index));
+    if (m[2] !== undefined) {
+      nodes.push(
+        <strong key={`${kp}b${i}`} className="font-bold text-slate-50">
+          {m[2]}
+        </strong>
+      );
+    } else if (m[3] !== undefined || m[4] !== undefined) {
+      nodes.push(
+        <em key={`${kp}i${i}`} className="italic text-slate-300">
+          {m[3] ?? m[4]}
+        </em>
+      );
+    } else if (m[5] !== undefined) {
+      nodes.push(
+        <code
+          key={`${kp}c${i}`}
+          className="px-1 py-0.5 rounded bg-slate-800/70 text-[#3ddc6c] font-mono text-[11px]"
+        >
+          {m[5]}
+        </code>
+      );
+    }
+    last = m.index + m[0].length;
+    i++;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes;
+}
+
+const BULLET_RE = /^\s*[-*]\s+(.*)$/;
+const NUM_RE = /^\s*\d+\.\s+(.*)$/;
+
+function Markdown({ text }: { text: string }) {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const blocks: React.ReactNode[] = [];
+  let i = 0;
+  let key = 0;
+  while (i < lines.length) {
+    if (lines[i].trim() === "") {
+      i++;
+      continue;
+    }
+    if (BULLET_RE.test(lines[i])) {
+      const items: string[] = [];
+      while (i < lines.length && BULLET_RE.test(lines[i])) {
+        items.push(lines[i].replace(BULLET_RE, "$1"));
+        i++;
+      }
+      const k = key++;
+      blocks.push(
+        <ul key={k} className="list-disc pl-4 space-y-0.5 marker:text-[#3ddc6c]">
+          {items.map((it, j) => (
+            <li key={j}>{renderInline(it, `u${k}-${j}-`)}</li>
+          ))}
+        </ul>
+      );
+      continue;
+    }
+    if (NUM_RE.test(lines[i])) {
+      const items: string[] = [];
+      while (i < lines.length && NUM_RE.test(lines[i])) {
+        items.push(lines[i].replace(NUM_RE, "$1"));
+        i++;
+      }
+      const k = key++;
+      blocks.push(
+        <ol key={k} className="list-decimal pl-4 space-y-0.5 marker:text-slate-500">
+          {items.map((it, j) => (
+            <li key={j}>{renderInline(it, `o${k}-${j}-`)}</li>
+          ))}
+        </ol>
+      );
+      continue;
+    }
+    const para: string[] = [];
+    while (
+      i < lines.length &&
+      lines[i].trim() !== "" &&
+      !BULLET_RE.test(lines[i]) &&
+      !NUM_RE.test(lines[i])
+    ) {
+      para.push(lines[i]);
+      i++;
+    }
+    const k = key++;
+    blocks.push(
+      <p key={k}>
+        {para.map((ln, j) => (
+          <React.Fragment key={j}>
+            {renderInline(ln, `p${k}-${j}-`)}
+            {j < para.length - 1 && <br />}
+          </React.Fragment>
+        ))}
+      </p>
+    );
+  }
+  return <div className="space-y-2">{blocks}</div>;
+}
+
 function MessageBubble({
   role,
   text,
@@ -246,7 +358,7 @@ function MessageBubble({
         )}
         {text && (
           <div
-            className={`text-xs leading-relaxed rounded-2xl px-3 py-2 border ${
+            className={`text-xs leading-relaxed rounded-2xl px-3 py-2 border break-words ${
               isUser
                 ? "bg-[#3ddc6c]/10 border-[#3ddc6c]/25 text-emerald-50"
                 : error
@@ -254,7 +366,7 @@ function MessageBubble({
                   : "bg-[#080d11] border-slate-900 text-slate-200"
             }`}
           >
-            {text}
+            {isUser ? text : <Markdown text={text} />}
           </div>
         )}
       </div>
