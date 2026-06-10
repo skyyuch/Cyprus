@@ -2,5 +2,5 @@
   "name": "xSyphon Cyprus",
   "description": "iFX EXPO Cyprus 2026 interactive liquidity aggregation simulation workspace for kiosk display.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

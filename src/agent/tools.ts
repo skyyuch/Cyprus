@@ -36,16 +36,16 @@ export interface ToolResult {
   mutated?: boolean;
 }
 
-// --- Gemini function declarations (REST schema: uppercase Type enum) ---
-export const FUNCTION_DECLARATIONS = [
+// --- Anthropic tool definitions (JSON Schema via input_schema) ---
+export const TOOL_DEFINITIONS = [
   {
     name: "get_market_data",
     description:
       "Get the current live mid, derived bid/ask and intraday change for an instrument. Prices are real (guest feed); spreads are illustrative.",
-    parameters: {
-      type: "OBJECT",
+    input_schema: {
+      type: "object",
       properties: {
-        symbol: { type: "STRING", description: "Instrument, e.g. 'EUR/USD', 'XAU/USD'." },
+        symbol: { type: "string", description: "Instrument, e.g. 'EUR/USD', 'XAU/USD'." },
       },
       required: ["symbol"],
     },
@@ -54,10 +54,10 @@ export const FUNCTION_DECLARATIONS = [
     name: "get_lp_quotes",
     description:
       "Return each anonymised liquidity provider's simulated bid/ask/spread for a symbol, ranked by liquidity score. Use to compare LPs.",
-    parameters: {
-      type: "OBJECT",
+    input_schema: {
+      type: "object",
       properties: {
-        symbol: { type: "STRING", description: "Instrument, e.g. 'EUR/USD'." },
+        symbol: { type: "string", description: "Instrument, e.g. 'EUR/USD'." },
       },
       required: ["symbol"],
     },
@@ -66,12 +66,12 @@ export const FUNCTION_DECLARATIONS = [
     name: "get_best_spread",
     description:
       "Aggregate top-of-book across active LPs: best bid, best ask, effective spread (pips) and the resulting client price after mark-up.",
-    parameters: {
-      type: "OBJECT",
+    input_schema: {
+      type: "object",
       properties: {
-        symbol: { type: "STRING", description: "Instrument, e.g. 'EUR/USD'." },
+        symbol: { type: "string", description: "Instrument, e.g. 'EUR/USD'." },
         client_tier: {
-          type: "STRING",
+          type: "string",
           description: "Client tier for the mark-up: 'tier1', 'tier2' or 'tier3'. Defaults to tier1.",
         },
       },
@@ -82,19 +82,19 @@ export const FUNCTION_DECLARATIONS = [
     name: "set_parameter",
     description:
       "Adjust a Pricing/Routing/Risk parameter and return the before/after values plus the expected impact.",
-    parameters: {
-      type: "OBJECT",
+    input_schema: {
+      type: "object",
       properties: {
         param: {
-          type: "STRING",
+          type: "string",
           description:
             "One of: 'markup_tier1','markup_tier2','markup_tier3' (pips), 'spread_floor' (pips, needs symbol), 'routing_strategy' ('best_price'|'lowest_latency'|'balanced'), 'ab_book_threshold_usd', 'aggregated_lp_count'.",
         },
         value: {
-          type: "STRING",
+          type: "string",
           description: "New value. Numeric params accept a number as string; routing_strategy accepts the enum.",
         },
-        symbol: { type: "STRING", description: "Required only when param is 'spread_floor'." },
+        symbol: { type: "string", description: "Required only when param is 'spread_floor'." },
       },
       required: ["param", "value"],
     },
@@ -102,18 +102,18 @@ export const FUNCTION_DECLARATIONS = [
   {
     name: "get_routing_status",
     description: "Return the current routing strategy, A/B-book threshold and number of aggregated LPs.",
-    parameters: { type: "OBJECT", properties: {} },
+    input_schema: { type: "object", properties: {} },
   },
   {
     name: "route_order",
     description:
       "Decide how an order would be routed WITHOUT executing it: A-book vs B-book, chosen LP and rationale based on the current routing strategy.",
-    parameters: {
-      type: "OBJECT",
+    input_schema: {
+      type: "object",
       properties: {
-        symbol: { type: "STRING", description: "Instrument." },
-        side: { type: "STRING", description: "'buy' or 'sell'." },
-        size_usd: { type: "NUMBER", description: "Order notional in USD." },
+        symbol: { type: "string", description: "Instrument." },
+        side: { type: "string", description: "'buy' or 'sell'." },
+        size_usd: { type: "number", description: "Order notional in USD." },
       },
       required: ["symbol", "side", "size_usd"],
     },
@@ -122,10 +122,10 @@ export const FUNCTION_DECLARATIONS = [
     name: "get_risk_status",
     description:
       "Return NOP usage vs limit (per symbol or all symbols), aggregate NOP usage and margin usage vs margin-call/stop-out levels.",
-    parameters: {
-      type: "OBJECT",
+    input_schema: {
+      type: "object",
       properties: {
-        symbol: { type: "STRING", description: "Optional. Omit to get all symbols + aggregate." },
+        symbol: { type: "string", description: "Optional. Omit to get all symbols + aggregate." },
       },
     },
   },
@@ -133,10 +133,10 @@ export const FUNCTION_DECLARATIONS = [
     name: "suggest_hedge",
     description:
       "If a symbol's NOP is near its limit, suggest a hedge (size + LP) to bring it back within risk appetite.",
-    parameters: {
-      type: "OBJECT",
+    input_schema: {
+      type: "object",
       properties: {
-        symbol: { type: "STRING", description: "Instrument to evaluate for hedging." },
+        symbol: { type: "string", description: "Instrument to evaluate for hedging." },
       },
       required: ["symbol"],
     },
@@ -145,12 +145,12 @@ export const FUNCTION_DECLARATIONS = [
     name: "execute_order",
     description:
       "Simulate executing an order: pre-trade risk gate (NOP limit), routed LP, fill price with slippage, latency and commission. Rejected if it would breach a NOP limit. Mutates the risk book.",
-    parameters: {
-      type: "OBJECT",
+    input_schema: {
+      type: "object",
       properties: {
-        symbol: { type: "STRING", description: "Instrument." },
-        side: { type: "STRING", description: "'buy' or 'sell'." },
-        size_usd: { type: "NUMBER", description: "Order notional in USD." },
+        symbol: { type: "string", description: "Instrument." },
+        side: { type: "string", description: "'buy' or 'sell'." },
+        size_usd: { type: "number", description: "Order notional in USD." },
       },
       required: ["symbol", "side", "size_usd"],
     },

@@ -20,18 +20,18 @@ Self-contained — no live market feed, no backend required to run.
 
 ## Ask Aether (AI live desk demo)
 
-The **Ask Aether** button (top-right) opens an overlay where a real Gemini agent
+The **Ask Aether** button (top-right) opens an overlay where a real Claude agent
 prices, routes and risk-manages institutional flow by calling desk tools over the
 live feed. It demonstrates five scenarios: LP spread comparison, parameter changes,
 order routing (A/B-book), risk/NOP status, and simulated execution.
 
-- **Real LLM:** Gemini (`gemini-2.5-flash`, function calling) via a stateless proxy.
+- **Real LLM:** Claude (`claude-sonnet-4-5`, tool use) via a stateless proxy.
 - **The key never reaches the browser.** The front-end posts to `/api/agent`; the
-  proxy injects `GEMINI_API_KEY` server-side and forwards to Gemini.
+  proxy injects `ANTHROPIC_API_KEY` server-side and forwards to Anthropic.
   - Local dev: a Vite middleware (`vite.config.ts`) serves `/api/agent`, reading
-    `GEMINI_API_KEY` from `.env`.
+    `ANTHROPIC_API_KEY` from `.env`.
   - Production: a Cloudflare Pages Function (`functions/api/agent.ts`) does the same,
-    reading the key from a Pages secret. Both share `functions/_lib/gemini.ts`.
+    reading the key from a Pages secret. Both share `functions/_lib/anthropic.ts`.
 - **Simulated world, real prices:** LPs (`LP-01…LP-12`), pricing parameters, the
   routing engine and the risk book are a deterministic simulation in `src/agent/`.
   Mid prices come from the live guest feed. Everything is labelled illustrative.
@@ -42,7 +42,7 @@ Set up the key locally:
 
 ```bash
 cp .env.example .env
-# edit .env and set GEMINI_API_KEY=your-real-key
+# edit .env and set ANTHROPIC_API_KEY=your-real-key
 npm run dev
 ```
 
@@ -75,8 +75,8 @@ Any static host works (output dir is `dist/`).
 - Build command: `npm run build`
 - Output directory: `dist`
 - The `functions/` folder is auto-deployed as Pages Functions (gives you `/api/agent`).
-- In **Settings → Environment variables**, add a secret `GEMINI_API_KEY` (and optionally
-  `GEMINI_MODEL`). Without it, the booth still works but "Ask Aether" shows AI offline.
+- In **Settings → Environment variables**, add a secret `ANTHROPIC_API_KEY` (and optionally
+  `ANTHROPIC_MODEL`). Without it, the booth still works but "Ask Aether" shows AI offline.
 
 You'll get a URL like `xsyphon-cyprus.pages.dev`. Later you can add a custom domain
 (e.g. `cyprus.xsyphon.com`) via CNAME.

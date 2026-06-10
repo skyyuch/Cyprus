@@ -13,7 +13,7 @@ import { useCallback, useRef, useState } from "react";
 import type { LiveInstrument } from "../useLiveQuotes";
 import { getSnapshot, type SimSnapshot } from "./simState";
 import { SYSTEM_PROMPT } from "./systemPrompt";
-import { executeTool, FUNCTION_DECLARATIONS, type QuoteProvider } from "./tools";
+import { executeTool, TOOL_DEFINITIONS, type QuoteProvider } from "./tools";
 
 export interface ToolCallRecord {
   name: string;
@@ -29,14 +29,26 @@ export interface ChatMessage {
   error?: boolean;
 }
 
-interface GeminiPart {
-  text?: string;
-  functionCall?: { name: string; args?: Record<string, unknown> };
-  functionResponse?: { name: string; response: Record<string, unknown> };
+// Anthropic Messages content blocks.
+interface TextBlock {
+  type: "text";
+  text: string;
 }
-interface GeminiContent {
-  role: string;
-  parts: GeminiPart[];
+interface ToolUseBlock {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+interface ToolResultBlock {
+  type: "tool_result";
+  tool_use_id: string;
+  content: string;
+}
+type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock;
+interface AnthropicMessage {
+  role: "user" | "assistant";
+  content: string | ContentBlock[];
 }
 
 const MAX_TOOL_ROUNDS = 6;
@@ -91,15 +103,15 @@ export function useAgent(instruments: LiveInstrument[]) {
       busyRef.current = true;
       setBusy(true);
 
-      // Build the running Gemini contents from prior turns + this message.
+      // Build the running message history from prior turns + this message.
       // We replay only the visible chat as plain text history (tool exchanges are
       // ephemeral and re-derivable); this keeps the request small for the booth.
-      const contents: GeminiContent[] = [];
+      const messagesPayload: AnthropicMessage[] = [];
       messagesRef.current.forEach((m) => {
-        if (m.role === "user") contents.push({ role: "user", parts: [{ text: m.text }] });
-        else if (m.text && !m.error) contents.push({ role: "model", parts: [{ text: m.text }] });
+        if (m.role === "user") messagesPayload.push({ role: "user", content: m.text });
+        else if (m.text && !m.error) messagesPayload.push({ role: "assistant", content: m.text });
       });
-      contents.push({ role: "user", parts: [{ text }] });
+      messagesPayload.push({ role: "user", content: text });
 
       setMessages((prev) => [...prev, { id: uid(), role: "user", text }]);
 
@@ -112,53 +124,59 @@ export function useAgent(instruments: LiveInstrument[]) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              contents,
-              tools: [{ functionDeclarations: FUNCTION_DECLARATIONS }],
-              systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+              messages: messagesPayload,
+              system: SYSTEM_PROMPT,
+              tools: TOOL_DEFINITIONS,
+              max_tokens: 1024,
             }),
           });
 
           if (!resp.ok) {
             const errBody = await resp.json().catch(() => ({}));
-            throw new Error((errBody as { error?: string }).error || `Proxy error ${resp.status}`);
+            const e = errBody as { error?: string | { message?: string } };
+            const msg = typeof e.error === "string" ? e.error : e.error?.message;
+            throw new Error(msg || `Proxy error ${resp.status}`);
           }
 
           const data = (await resp.json()) as {
-            candidates?: { content?: GeminiContent }[];
-            promptFeedback?: unknown;
+            content?: ContentBlock[];
+            stop_reason?: string;
+            error?: { message?: string };
           };
-          const content = data.candidates?.[0]?.content;
-          const parts = content?.parts || [];
-          const functionCalls = parts.filter((p) => p.functionCall);
-          const textParts = parts
-            .filter((p) => typeof p.text === "string")
-            .map((p) => p.text as string)
+          if (data.error) throw new Error(data.error.message || "Anthropic error");
+
+          const blocks = data.content || [];
+          const toolUses = blocks.filter((b): b is ToolUseBlock => b.type === "tool_use");
+          const textOut = blocks
+            .filter((b): b is TextBlock => b.type === "text")
+            .map((b) => b.text)
             .join("\n")
             .trim();
 
-          if (functionCalls.length === 0) {
-            finalText = textParts || "(no response)";
+          if (toolUses.length === 0) {
+            finalText = textOut || "(no response)";
             break;
           }
 
-          // Record the model's turn (function calls) for fidelity.
-          contents.push({ role: "model", parts });
+          // Echo the assistant's full turn (text + tool_use) back for fidelity.
+          messagesPayload.push({ role: "assistant", content: blocks });
 
-          const responseParts: GeminiPart[] = [];
-          for (const p of functionCalls) {
-            const name = p.functionCall!.name;
-            const args = p.functionCall!.args || {};
+          const resultBlocks: ToolResultBlock[] = [];
+          for (const tu of toolUses) {
+            const args = tu.input || {};
             if (typeof args.symbol === "string") setFocusSymbol(args.symbol);
-            const result = executeTool(name, args, quotes);
+            const result = executeTool(tu.name, args, quotes);
             if (result.mutated) refreshSnapshot();
-            collectedToolCalls.push({ name, args, result: result.data });
-            responseParts.push({
-              functionResponse: { name, response: result.data },
+            collectedToolCalls.push({ name: tu.name, args, result: result.data });
+            resultBlocks.push({
+              type: "tool_result",
+              tool_use_id: tu.id,
+              content: JSON.stringify(result.data),
             });
           }
-          contents.push({ role: "user", parts: responseParts });
+          messagesPayload.push({ role: "user", content: resultBlocks });
 
-          if (textParts) finalText = textParts;
+          if (textOut) finalText = textOut;
           if (round === MAX_TOOL_ROUNDS - 1) {
             finalText =
               finalText ||

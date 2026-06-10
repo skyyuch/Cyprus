@@ -4,18 +4,18 @@
  *
  * Cloudflare Pages Function: POST /api/agent
  *
- * Stateless proxy that holds GEMINI_API_KEY (Pages secret) and forwards the
- * front-end's generateContent request to Gemini. No conversation is stored.
+ * Stateless proxy that holds ANTHROPIC_API_KEY (Pages secret) and forwards the
+ * front-end's Messages request to Claude. No conversation is stored.
  *
- * Deploy: set GEMINI_API_KEY (and optionally GEMINI_MODEL) as Pages env secrets.
+ * Deploy: set ANTHROPIC_API_KEY (and optionally ANTHROPIC_MODEL) as Pages secrets.
  */
 
-import { callGemini, type AgentRequestBody } from "../_lib/gemini";
+import { callLlm, type AgentRequestBody } from "../_lib/anthropic";
 
 // Minimal local typing so we don't need @cloudflare/workers-types in tsc.
 interface PagesContext {
   request: Request;
-  env: { GEMINI_API_KEY?: string; GEMINI_MODEL?: string };
+  env: { ANTHROPIC_API_KEY?: string; ANTHROPIC_MODEL?: string };
 }
 
 function json(data: unknown, status = 200): Response {
@@ -37,6 +37,6 @@ export async function onRequest(ctx: PagesContext): Promise<Response> {
     return json({ error: "Invalid JSON body." }, 400);
   }
 
-  const result = await callGemini(body, ctx.env.GEMINI_API_KEY, ctx.env.GEMINI_MODEL || undefined);
+  const result = await callLlm(body, ctx.env.ANTHROPIC_API_KEY, ctx.env.ANTHROPIC_MODEL || undefined);
   return json(result.body, result.status);
 }
