@@ -14,8 +14,37 @@ Self-contained — no live market feed, no backend required to run.
   Toggle feeds on/off to watch the smart router re-aggregate; speed/intensity sliders.
 - **XAU/CNH spotlight** — gold-vs-offshore-RMB edge (from 50 g, 24/5, STP, zero last look).
 - **Ping Syphon Core** — interactive speed test (0.8ms routing core, slippage, fill 99.7%).
+- **Ask Aether** — a live, Gemini-driven AI execution desk (see below).
 - **Lead capture** — name / company / email / volume / requirement, tagged `event: iFX EXPO Cyprus 2026 · Booth 76`.
   Posts to Formspree if configured, otherwise opens a pre-filled email. Plus Calendly + vCard CTAs.
+
+## Ask Aether (AI live desk demo)
+
+The **Ask Aether** button (top-right) opens an overlay where a real Gemini agent
+prices, routes and risk-manages institutional flow by calling desk tools over the
+live feed. It demonstrates five scenarios: LP spread comparison, parameter changes,
+order routing (A/B-book), risk/NOP status, and simulated execution.
+
+- **Real LLM:** Gemini (`gemini-2.5-flash`, function calling) via a stateless proxy.
+- **The key never reaches the browser.** The front-end posts to `/api/agent`; the
+  proxy injects `GEMINI_API_KEY` server-side and forwards to Gemini.
+  - Local dev: a Vite middleware (`vite.config.ts`) serves `/api/agent`, reading
+    `GEMINI_API_KEY` from `.env`.
+  - Production: a Cloudflare Pages Function (`functions/api/agent.ts`) does the same,
+    reading the key from a Pages secret. Both share `functions/_lib/gemini.ts`.
+- **Simulated world, real prices:** LPs (`LP-01…LP-12`), pricing parameters, the
+  routing engine and the risk book are a deterministic simulation in `src/agent/`.
+  Mid prices come from the live guest feed. Everything is labelled illustrative.
+- **Offline:** if `/api/agent` or the network is unreachable, the chat shows
+  "AI desk offline" while the dashboard and live prices keep working.
+
+Set up the key locally:
+
+```bash
+cp .env.example .env
+# edit .env and set GEMINI_API_KEY=your-real-key
+npm run dev
+```
 
 ## Run locally
 
@@ -42,12 +71,19 @@ Settings are saved in the browser's `localStorage` (`XSYPHON_CONFIG`), so each i
 
 Any static host works (output dir is `dist/`).
 
-**Cloudflare Pages / Vercel:** connect this repo →
+**Cloudflare Pages (recommended — runs the Aether proxy):** connect this repo →
 - Build command: `npm run build`
 - Output directory: `dist`
+- The `functions/` folder is auto-deployed as Pages Functions (gives you `/api/agent`).
+- In **Settings → Environment variables**, add a secret `GEMINI_API_KEY` (and optionally
+  `GEMINI_MODEL`). Without it, the booth still works but "Ask Aether" shows AI offline.
 
 You'll get a URL like `xsyphon-cyprus.pages.dev`. Later you can add a custom domain
 (e.g. `cyprus.xsyphon.com`) via CNAME.
+
+> **Vercel / other static hosts:** the static site works, but `/api/agent` won't exist
+> unless you port `functions/api/agent.ts` to that platform's serverless function format.
+> Cloudflare Pages is the path of least resistance here.
 
 ## iPad kiosk (offline-ready)
 

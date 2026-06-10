@@ -6,3 +6,7 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local-only sales context brought from syphon-sales (rules, plan, KB).
+# NEVER commit to the public Cyprus repo (contains internal strategy).
+.cursor/

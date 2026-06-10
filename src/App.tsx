@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useLiveQuotes } from "./useLiveQuotes";
+import AetherDemo from "./components/AetherDemo";
 import { 
   Activity, 
   Settings, 
@@ -72,6 +73,7 @@ export default function App() {
   });
 
   const [showConfig, setShowConfig] = useState(false);
+  const [showAether, setShowAether] = useState(false);
   const [tempEndpoint, setTempEndpoint] = useState(config.formEndpoint);
   const [tempCalendly, setTempCalendly] = useState(config.calendlyUrl);
   const [tempEmail, setTempEmail] = useState(config.fallbackEmail);
@@ -874,6 +876,16 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3.5">
+            {/* Ask Aether — AI live desk demo */}
+            <button
+              onClick={() => setShowAether(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-[#3ddc6c]/10 border border-[#3ddc6c]/30 hover:bg-[#3ddc6c]/20 text-[#3ddc6c] rounded-xl transition-all cursor-pointer font-mono text-[11px] font-bold tracking-wider uppercase group-hover:scale-105"
+              title="Ask the Syphon Aether AI desk"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span className="hidden sm:inline">Ask Aether</span>
+            </button>
+
             {/* Booth Configuration Trigger */}
             <button
               onClick={() => {
@@ -1576,6 +1588,15 @@ export default function App() {
           <a href="https://xsyphon.com" target="_blank" rel="noopener noreferrer" className="text-[#3ddc6c] hover:underline"> xsyphon.com</a>.
         </div>
       </footer>
+
+      {/* SYPHON AETHER — AI LIVE DESK DEMO OVERLAY */}
+      <AetherDemo
+        open={showAether}
+        onClose={() => setShowAether(false)}
+        instruments={instruments}
+        selectedSym={selectedSym}
+        onSelectSym={setSelectedSym}
+      />
 
       {/* MODAL CONFIGURATOR PANEL OVERLAY */}
       {showConfig && (

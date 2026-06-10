@@ -1,14 +1,60 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import {defineConfig, loadEnv, type PluginOption} from 'vite';
 import {VitePWA} from 'vite-plugin-pwa';
+import {callGemini} from './functions/_lib/gemini';
 
-export default defineConfig(() => {
+// Dev-only proxy that mirrors the Cloudflare Pages Function at /api/agent, so
+// `npm run dev` exercises the exact same forwarding core. The GEMINI_API_KEY is
+// read from .env on the server side and never reaches the browser bundle.
+function devAgentProxy(apiKey: string | undefined, model: string | undefined): PluginOption {
+  return {
+    name: 'dev-agent-proxy',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/api/agent', (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({error: 'Method not allowed. Use POST.'}));
+          return;
+        }
+        let raw = '';
+        req.on('data', (chunk) => {
+          raw += chunk;
+        });
+        req.on('end', async () => {
+          let body: unknown;
+          try {
+            body = JSON.parse(raw || '{}');
+          } catch {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({error: 'Invalid JSON body.'}));
+            return;
+          }
+          const result = await callGemini(body as never, apiKey, model || undefined);
+          res.statusCode = result.status;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(result.body));
+        });
+      });
+    },
+  };
+}
+
+export default defineConfig(({mode}) => {
+  // Load all env vars (no VITE_ prefix filter) for server-side use only.
+  const env = loadEnv(mode, process.cwd(), '');
+  const geminiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  const geminiModel = env.GEMINI_MODEL || process.env.GEMINI_MODEL;
+
   return {
     plugins: [
       react(),
       tailwindcss(),
+      devAgentProxy(geminiKey, geminiModel),
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: ['xsyphon-logo.png', 'xsyphon.vcf'],
