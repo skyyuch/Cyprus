@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from "react";
+import { useLiveQuotes } from "./useLiveQuotes";
 import { 
   Activity, 
   Settings, 
@@ -29,14 +30,6 @@ import {
 } from "lucide-react";
 
 // Types
-interface Instrument {
-  sym: string;
-  px: number;
-  dp: number; // decimal places
-  base: number;
-  chg: number;
-}
-
 interface LP {
   name: string;
   active: boolean;
@@ -135,33 +128,11 @@ export default function App() {
     return () => clearInterval(interval);
   }, [reducedMotion]);
 
-  // --- Instrument State (Random Walk simulation) ---
-  const [instruments, setInstruments] = useState<Instrument[]>([
-    { sym: "EUR/USD", px: 1.16720, dp: 5, base: 1.16720, chg: 0 },
-    { sym: "GBP/USD", px: 1.31840, dp: 5, base: 1.31840, chg: 0 },
-    { sym: "USD/JPY", px: 160.215, dp: 3, base: 160.215, chg: 0 },
-    { sym: "AUD/USD", px: 0.62510, dp: 5, base: 0.62510, chg: 0 },
-    { sym: "USD/CNH", px: 7.28400, dp: 4, base: 7.28400, chg: 0 },
-    { sym: "XAU/USD", px: 4724.50, dp: 2, base: 4724.50, chg: 0 },
-    { sym: "XAG/USD", px: 32.185, dp: 3, base: 32.185, chg: 0 },
-    { sym: "XAU/CNH", px: 1102.40, dp: 2, base: 1102.40, chg: 0 }, // Black Gold highlight
-    { sym: "BTC/USD", px: 71240.0, dp: 1, base: 71240.0, chg: 0 }
-  ]);
+  // --- Instruments: live GTS2 quote feed (replaces the old random-walk sim) ---
+  const { instruments, status: quoteStatus } = useLiveQuotes();
 
   const [selectedSym, setSelectedSym] = useState("EUR/USD");
-  const [historyMap, setHistoryMap] = useState<Record<string, number[]>>(() => {
-    return {
-      "EUR/USD": [1.1668, 1.1670, 1.1665, 1.1673, 1.1671, 1.1672, 1.1670, 1.1673, 1.1672],
-      "GBP/USD": [1.3180, 1.3185, 1.3179, 1.3182, 1.3186, 1.3184, 1.3181, 1.3185, 1.3184],
-      "USD/JPY": [160.15, 160.20, 160.10, 160.25, 160.18, 160.215, 160.19, 160.23, 160.215],
-      "AUD/USD": [0.6248, 0.6252, 0.6245, 0.6250, 0.6253, 0.6251, 0.6249, 0.6252, 0.6251],
-      "USD/CNH": [7.2820, 7.2850, 7.2810, 7.2835, 7.2842, 7.2840, 7.2830, 7.2845, 7.2840],
-      "XAU/USD": [4722.0, 4725.2, 4721.5, 4726.0, 4723.8, 4724.50, 4723.0, 4725.5, 4724.50],
-      "XAG/USD": [32.150, 32.200, 32.120, 32.190, 32.175, 32.185, 32.160, 32.210, 32.185],
-      "XAU/CNH": [1101.5, 1103.0, 1100.8, 1102.5, 1102.1, 1102.40, 1101.9, 1102.8, 1102.40],
-      "BTC/USD": [71190.0, 71280.0, 71150.0, 71260.0, 71210.0, 71240.0, 71220.0, 71270.0, 71240.0]
-    };
-  });
+  const [historyMap, setHistoryMap] = useState<Record<string, number[]>>({});
 
   // --- Cumulative Stats (illustrative; aligned with published figures) ---
   const [statsVolume, setStatsVolume] = useState(1.02); // $1B+ daily notional
@@ -201,42 +172,10 @@ export default function App() {
     return () => clearInterval(interval);
   }, [reducedMotion]);
 
-  // --- Random Walk Tick Simulator Effect ---
+  // --- Engine stats (illustrative): daily volume + core routing latency ---
   useEffect(() => {
     if (reducedMotion) return;
-    
     const interval = setInterval(() => {
-      setInstruments(prev => {
-        const next = prev.map(item => {
-          const vol = item.base * 0.00015 + (item.dp <= 2 ? item.base * 0.00015 : 0);
-          const pxDelta = (Math.random() - 0.5) * vol * 3.5 * simSpeed;
-          const nextPx = Math.max(0.0001, item.px + pxDelta);
-          const nextChg = ((nextPx - item.base) / item.base) * 100;
-          return {
-            ...item,
-            px: nextPx,
-            chg: nextChg
-          };
-        });
-
-        // Save selected symbol history inside historyMap
-        const currentSelected = next.find(x => x.sym === selectedSym);
-        if (currentSelected) {
-          setHistoryMap(prevMap => {
-            const h = prevMap[selectedSym] || [];
-            // limit history length to 30 elements
-            const nextH = [...h.slice(-29), currentSelected.px];
-            return {
-              ...prevMap,
-              [selectedSym]: nextH
-            };
-          });
-        }
-
-        return next;
-      });
-
-      // Fluctuate statistics slightly for dynamic presentation (stays ~$1B+)
       setStatsVolume(v => {
         const next = v + (Math.random() - 0.3) * 0.004;
         return next < 1.0 ? 1.0 + Math.random() * 0.02 : next;
@@ -248,11 +187,20 @@ export default function App() {
         const delta = (Math.random() - 0.5) * 0.08;
         return parseFloat(Math.max(0.6, baseLat + delta).toFixed(2));
       });
-
     }, 1200);
-
     return () => clearInterval(interval);
-  }, [reducedMotion, selectedSym, lps, simSpeed]);
+  }, [reducedMotion, lps]);
+
+  // --- Build sparkline history for the selected symbol from live ticks ---
+  useEffect(() => {
+    const sel = instruments.find(x => x.sym === selectedSym);
+    if (!sel || !sel.px) return;
+    setHistoryMap(prev => {
+      const h = prev[selectedSym] || [];
+      if (h.length && h[h.length - 1] === sel.px) return prev; // unchanged
+      return { ...prev, [selectedSym]: [...h.slice(-29), sel.px] };
+    });
+  }, [instruments, selectedSym]);
 
   // --- Interactivity: Test Our Engine ---
   const [isTestingEngine, setIsTestingEngine] = useState(false);
@@ -981,14 +929,14 @@ export default function App() {
           </div>
         </section>
 
-        {/* COMPREHENSIVE SIMULATED REALTIME RATES MARQUEE */}
+        {/* LIVE REALTIME RATES MARQUEE (GTS2 guest feed) */}
         <section id="ratesMarquee" className="bg-[#030609]/95 border border-slate-900/70 rounded-xl overflow-hidden py-2.5 px-4 flex items-center relative gap-4">
           <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-[#040608] to-transparent z-10" />
           <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-[#040608] to-transparent z-10" />
           
-          <div className="font-mono text-[9px] font-bold tracking-widest text-[#3ddc6c] shrink-0 uppercase bg-slate-950 px-2.5 py-1 border border-[#3ddc6c]/20 rounded shadow z-10 text-glow flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#3ddc6c] animate-pulse" />
-            LIVE SPECS
+          <div className={`font-mono text-[9px] font-bold tracking-widest shrink-0 uppercase bg-slate-950 px-2.5 py-1 border rounded shadow z-10 text-glow flex items-center gap-1 ${quoteStatus === "live" ? "text-[#3ddc6c] border-[#3ddc6c]/20" : "text-amber-300 border-amber-400/30"}`}>
+            <span className={`h-1.5 w-1.5 rounded-full animate-pulse ${quoteStatus === "live" ? "bg-[#3ddc6c]" : "bg-amber-400"}`} />
+            {quoteStatus === "live" ? "LIVE" : "RECONNECTING"}
           </div>
 
           <div className="flex-1 overflow-hidden relative select-none">
@@ -1012,7 +960,7 @@ export default function App() {
                       >
                         <span className="text-slate-400">{ins.sym}</span>
                         <span className="text-white font-semibold">
-                          {ins.px.toLocaleString("en-US", { minimumFractionDigits: ins.dp, maximumFractionDigits: ins.dp })}
+                          {ins.px ? ins.px.toLocaleString("en-US", { minimumFractionDigits: ins.dp, maximumFractionDigits: ins.dp }) : "—"}
                         </span>
                         <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${isGrowth ? "text-[#3ddc6c]" : "text-rose-400"}`}>
                           {isGrowth ? "▲ +" : "▼ "}{Math.abs(ins.chg).toFixed(2)}%
@@ -1072,7 +1020,7 @@ export default function App() {
 
                         <div className="text-right font-mono text-xs">
                           <div className="font-bold text-slate-100">
-                            {ins.px.toLocaleString("en-US", { minimumFractionDigits: ins.dp, maximumFractionDigits: ins.dp })}
+                            {ins.px ? ins.px.toLocaleString("en-US", { minimumFractionDigits: ins.dp, maximumFractionDigits: ins.dp }) : "—"}
                           </div>
                           <span className={`text-[10px] font-semibold ${isGrowth ? "text-[#3ddc6c]" : "text-rose-400"}`}>
                             {isGrowth ? "▲ +" : "▼ "}{ins.chg.toFixed(2)}%
@@ -1092,7 +1040,7 @@ export default function App() {
                     {selectedSym} Sparkline (30t)
                   </span>
                   <span className="font-mono font-bold text-slate-200">
-                    {selectedAsset.px.toLocaleString("en-US", { minimumFractionDigits: selectedAsset.dp })}
+                    {selectedAsset.px ? selectedAsset.px.toLocaleString("en-US", { minimumFractionDigits: selectedAsset.dp }) : "—"}
                   </span>
                 </div>
                 {renderSparkline(selectedSym)}
@@ -1623,8 +1571,8 @@ export default function App() {
           xSyphon Ltd · FSC Mauritius License No. GB25204632 · MiFID II / UK FCA frameworks · © 2026
         </div>
         <div className="text-[9px] mt-1 text-slate-500 max-w-3xl mx-auto leading-relaxed">
-          For institutional and professional clients only. Trading involves risk. Live prices, engine metrics and the speed
-          test on this kiosk are illustrative client-side simulations, not a live market feed. Explore the full platform at
+          For institutional and professional clients only. Trading involves risk. Quotes shown are live indicative prices via
+          a guest market feed; the aggregation visual, engine metrics and the speed test are illustrative. Explore the full platform at
           <a href="https://xsyphon.com" target="_blank" rel="noopener noreferrer" className="text-[#3ddc6c] hover:underline"> xsyphon.com</a>.
         </div>
       </footer>
