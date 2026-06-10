@@ -1,0 +1,24 @@
+{
+  "name": "cyprus-infra",
+  "private": true,
+  "version": "0.0.0",
+  "description": "AWS CDK infrastructure for the xSyphon Cyprus microsite (S3 + CloudFront + Lambda /api/agent).",
+  "scripts": {
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy",
+    "destroy": "cdk destroy",
+    "bootstrap": "cdk bootstrap"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "aws-cdk": "^2.170.0",
+    "esbuild": "^0.25.0",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.8.2"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.170.0",
+    "constructs": "^10.3.0"
+  }
+}

@@ -85,6 +85,16 @@ You'll get a URL like `xsyphon-cyprus.pages.dev`. Later you can add a custom dom
 > unless you port `functions/api/agent.ts` to that platform's serverless function format.
 > Cloudflare Pages is the path of least resistance here.
 
+**AWS (S3 + CloudFront + Lambda):** an AWS CDK app under [`infra/`](infra/) deploys the
+static site to S3/CloudFront and the `/api/agent` proxy to a Lambda (key stays
+server-side). See [`infra/README.md`](infra/README.md). Quick version:
+
+```bash
+npm run build                                   # repo root
+cd infra && npm install
+ANTHROPIC_API_KEY=sk-ant-... npm run deploy     # prints the CloudFront URL
+```
+
 ## iPad kiosk (offline-ready)
 
 1. Open the deployed URL in **Safari once while online** (this caches the app + fonts).
