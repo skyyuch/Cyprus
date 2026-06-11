@@ -63,7 +63,7 @@ Click the **gear icon** (top-right) on the kiosk to set, per-device:
 - **Formspree endpoint** — e.g. `https://formspree.io/f/xxxxxx` (sign up at formspree.io, create a form).
   Leave blank to use the email fallback instead.
 - **Calendly URL** — your meeting-booking link.
-- **Fallback desk email** — where offline leads are sent (default `desk@xsyphon.com`).
+- **Fallback desk email** — where offline leads are sent (default `sky.yu@xsyphon.com`).
 
 Settings are saved in the browser's `localStorage` (`XSYPHON_CONFIG`), so each iPad keeps its own config.
 

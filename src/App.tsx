@@ -66,9 +66,9 @@ export default function App() {
       }
     }
     return {
-      formEndpoint: "",
+      formEndpoint: "https://formspree.io/f/mzdqakab",
       calendlyUrl: "",
-      fallbackEmail: "desk@xsyphon.com",
+      fallbackEmail: "sky.yu@xsyphon.com",
     };
   });
 
@@ -697,7 +697,7 @@ export default function App() {
         textBody += `Requirements: ${leadInputs.requirement || "—"}\n\n`;
         textBody += `[Sent from the booth kiosk]`;
 
-        const mailtoLink = `mailto:${config.fallbackEmail || "desk@xsyphon.com"}?subject=${encodeURIComponent("iFX EXPO Cyprus lead")}&body=${encodeURIComponent(textBody)}`;
+        const mailtoLink = `mailto:${config.fallbackEmail || "sky.yu@xsyphon.com"}?subject=${encodeURIComponent("iFX EXPO Cyprus lead")}&body=${encodeURIComponent(textBody)}`;
         window.location.href = mailtoLink;
 
         setFormFeedback({
@@ -732,7 +732,7 @@ export default function App() {
         const errorData = await resp.json();
         setFormFeedback({
           type: "err",
-          text: (errorData?.errors && errorData.errors[0]?.message) || "Transmission protocol error. Please contact desk@xsyphon.com"
+          text: (errorData?.errors && errorData.errors[0]?.message) || "Transmission protocol error. Please contact sky.yu@xsyphon.com"
         });
       }
     } catch (err) {
@@ -740,7 +740,7 @@ export default function App() {
         type: "err",
         text: "Connectivity degraded. Activating offline protocol mail pipeline..."
       });
-      const mailtoLink = `mailto:${config.fallbackEmail || "desk@xsyphon.com"}?subject=${encodeURIComponent("iFX EXPO Cyprus 2026 lead (Booth 76)")}&body=${encodeURIComponent(JSON.stringify(payload, null, 2))}`;
+      const mailtoLink = `mailto:${config.fallbackEmail || "sky.yu@xsyphon.com"}?subject=${encodeURIComponent("iFX EXPO Cyprus 2026 lead (Booth 76)")}&body=${encodeURIComponent(JSON.stringify(payload, null, 2))}`;
       window.location.href = mailtoLink;
     } finally {
       setFormIsSubmitting(false);
@@ -753,7 +753,7 @@ export default function App() {
     const updated = {
       formEndpoint: tempEndpoint.trim(),
       calendlyUrl: tempCalendly.trim(),
-      fallbackEmail: tempEmail.trim() || "desk@xsyphon.com"
+      fallbackEmail: tempEmail.trim() || "sky.yu@xsyphon.com"
     };
     setConfig(updated);
     localStorage.setItem("XSYPHON_CONFIG", JSON.stringify(updated));
@@ -763,14 +763,13 @@ export default function App() {
 
   const loadKioskBoilerplate = (mode: "expo-onsite" | "reset") => {
     if (mode === "expo-onsite") {
-      // Replace these with your real links before the expo.
-      setTempEndpoint("");
+      setTempEndpoint("https://formspree.io/f/mzdqakab");
       setTempCalendly("https://calendly.com/your-name/cyprus-20min");
-      setTempEmail("desk@xsyphon.com");
+      setTempEmail("sky.yu@xsyphon.com");
     } else {
-      setTempEndpoint("");
+      setTempEndpoint("https://formspree.io/f/mzdqakab");
       setTempCalendly("");
-      setTempEmail("desk@xsyphon.com");
+      setTempEmail("sky.yu@xsyphon.com");
     }
   };
 
@@ -1656,13 +1655,13 @@ export default function App() {
                 </label>
                 <input
                   type="email"
-                  placeholder="desk@xsyphon.com"
+                  placeholder="sky.yu@xsyphon.com"
                   value={tempEmail}
                   onChange={(e) => setTempEmail(e.target.value)}
                   className="w-full bg-[#030609] border border-slate-900 rounded-xl p-2 text-white font-mono outline-none"
                 />
                 <span className="text-[8.5px] text-slate-500 block mt-1 leading-normal">
-                  Destination target for offline registration fallbacks. Default is desk@xsyphon.com.
+                  Destination target for offline registration fallbacks. Default is sky.yu@xsyphon.com.
                 </span>
               </div>
 
