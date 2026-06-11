@@ -54,22 +54,33 @@ interface AppConfig {
   fallbackEmail: string;
 }
 
+const DEFAULT_CONFIG: AppConfig = {
+  formEndpoint: "https://formspree.io/f/mzdqakab",
+  calendlyUrl: "",
+  fallbackEmail: "sky.yu@xsyphon.com",
+};
+
 export default function App() {
   // --- Kiosk Config State ---
+  // Merge any saved config over the defaults so a stale/blank Formspree
+  // endpoint from an old localStorage entry never disables auto-submit.
   const [config, setConfig] = useState<AppConfig>(() => {
     const saved = localStorage.getItem("XSYPHON_CONFIG");
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved) as Partial<AppConfig>;
+        return {
+          formEndpoint:
+            (parsed.formEndpoint || "").trim() || DEFAULT_CONFIG.formEndpoint,
+          calendlyUrl: parsed.calendlyUrl ?? DEFAULT_CONFIG.calendlyUrl,
+          fallbackEmail:
+            (parsed.fallbackEmail || "").trim() || DEFAULT_CONFIG.fallbackEmail,
+        };
       } catch (e) {
-        // use default
+        // fall through to defaults
       }
     }
-    return {
-      formEndpoint: "https://formspree.io/f/mzdqakab",
-      calendlyUrl: "",
-      fallbackEmail: "sky.yu@xsyphon.com",
-    };
+    return { ...DEFAULT_CONFIG };
   });
 
   const [showConfig, setShowConfig] = useState(false);
