@@ -812,9 +812,8 @@ export default function App() {
     const bodyW = Math.max(1.2, slot * 0.66);
     const yOf = (p: number) => svgH - padY - ((p - minVal) / range) * (svgH - padY * 2);
 
-    const isGold = symbol.includes("XAU") || symbol.includes("XAG");
-    const upColor = isGold ? "#D4AF37" : "#3ddc6c";
-    const downColor = isGold ? "#a87d2e" : "#f43f5e";
+    const upColor = "#3ddc6c";
+    const downColor = "#f43f5e";
 
     return (
       <div className="relative w-full h-[92px] bg-black/40 rounded-lg border border-slate-900/60 overflow-hidden">
