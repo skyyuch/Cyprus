@@ -7,6 +7,9 @@ export interface LiveInstrument {
   dp: number;
   base: number; // previous close, used for % change
   chg: number;
+  open: number; // session open (from feed)
+  high: number; // session high (from feed)
+  low: number; // session low (from feed)
 }
 
 export type QuoteStatus = "connecting" | "live" | "reconnecting";
@@ -17,7 +20,7 @@ const QUOTE_URL = "https://webkd.gmtradeweb1.com:7036";
 const QUOTE_PATH = "/socket.io/";
 
 // Display label -> feed szShortName (normalised) + decimal places.
-const TARGETS: { sym: string; feed: string; dp: number }[] = [
+export const TARGETS: { sym: string; feed: string; dp: number }[] = [
   { sym: "EUR/USD", feed: "EURUSD", dp: 5 },
   { sym: "GBP/USD", feed: "GBPUSD", dp: 5 },
   { sym: "USD/JPY", feed: "USDJPY", dp: 3 },
@@ -37,13 +40,13 @@ const norm = (s: string) => (s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
  */
 export function useLiveQuotes() {
   const [instruments, setInstruments] = useState<LiveInstrument[]>(
-    TARGETS.map((t) => ({ sym: t.sym, px: 0, dp: t.dp, base: 0, chg: 0 }))
+    TARGETS.map((t) => ({ sym: t.sym, px: 0, dp: t.dp, base: 0, chg: 0, open: 0, high: 0, low: 0 }))
   );
   const [status, setStatus] = useState<QuoteStatus>("connecting");
 
   const codeToIdx = useRef<Record<number, number>>({});
   const latest = useRef<LiveInstrument[]>(
-    TARGETS.map((t) => ({ sym: t.sym, px: 0, dp: t.dp, base: 0, chg: 0 }))
+    TARGETS.map((t) => ({ sym: t.sym, px: 0, dp: t.dp, base: 0, chg: 0, open: 0, high: 0, low: 0 }))
   );
   const dirty = useRef(false);
 
@@ -74,25 +77,41 @@ export function useLiveQuotes() {
       codeToIdx.current = next;
     });
 
-    socket.on("tick", (_flag: unknown, map: Record<string, { uiCodeID: number; bid: number; newP: number; preclose: number }>) => {
-      const m = codeToIdx.current;
-      let changed = false;
-      Object.values(map || {}).forEach((q) => {
-        const idx = m[q?.uiCodeID];
-        if (idx === undefined) return;
-        const px = Number(q.newP ?? q.bid);
-        if (!Number.isFinite(px)) return;
-        const base = Number(q.preclose) || px;
-        latest.current[idx] = {
-          ...latest.current[idx],
-          px,
-          base,
-          chg: base ? ((px - base) / base) * 100 : 0,
-        };
-        changed = true;
-      });
-      if (changed) dirty.current = true;
-    });
+    socket.on(
+      "tick",
+      (
+        _flag: unknown,
+        map: Record<
+          string,
+          { uiCodeID: number; bid: number; newP: number; preclose: number; open?: number; high?: number; low?: number }
+        >,
+      ) => {
+        const m = codeToIdx.current;
+        let changed = false;
+        Object.values(map || {}).forEach((q) => {
+          const idx = m[q?.uiCodeID];
+          if (idx === undefined) return;
+          const px = Number(q.newP ?? q.bid);
+          if (!Number.isFinite(px)) return;
+          const base = Number(q.preclose) || px;
+          const prev = latest.current[idx];
+          const open = Number(q.open) || prev.open || px;
+          const high = Math.max(Number(q.high) || px, px, prev.high || px);
+          const low = Math.min(Number(q.low) || px, px, prev.low || px);
+          latest.current[idx] = {
+            ...prev,
+            px,
+            base,
+            chg: base ? ((px - base) / base) * 100 : 0,
+            open,
+            high,
+            low,
+          };
+          changed = true;
+        });
+        if (changed) dirty.current = true;
+      },
+    );
 
     const flush = setInterval(() => {
       if (dirty.current) {

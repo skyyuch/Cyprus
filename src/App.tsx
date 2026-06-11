@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useLiveQuotes } from "./useLiveQuotes";
+import { useKlines } from "./useKlines";
 import AetherDemo from "./components/AetherDemo";
 import { 
   Activity, 
@@ -59,6 +60,7 @@ const DEFAULT_CONFIG: AppConfig = {
   calendlyUrl: "",
   fallbackEmail: "sky.yu@xsyphon.com",
 };
+
 
 export default function App() {
   // --- Kiosk Config State ---
@@ -145,7 +147,8 @@ export default function App() {
   const { instruments, status: quoteStatus } = useLiveQuotes();
 
   const [selectedSym, setSelectedSym] = useState("EUR/USD");
-  const [historyMap, setHistoryMap] = useState<Record<string, number[]>>({});
+  // Real historical OHLC candles for the selected symbol (5-minute bars).
+  const klines = useKlines(selectedSym, { num: 160, periodNum: 5, periodType: 1 });
 
   // --- Cumulative Stats (illustrative; aligned with published figures) ---
   const [statsVolume, setStatsVolume] = useState(1.02); // $1B+ daily notional
@@ -203,17 +206,6 @@ export default function App() {
     }, 1200);
     return () => clearInterval(interval);
   }, [reducedMotion, lps]);
-
-  // --- Build sparkline history for the selected symbol from live ticks ---
-  useEffect(() => {
-    const sel = instruments.find(x => x.sym === selectedSym);
-    if (!sel || !sel.px) return;
-    setHistoryMap(prev => {
-      const h = prev[selectedSym] || [];
-      if (h.length && h[h.length - 1] === sel.px) return prev; // unchanged
-      return { ...prev, [selectedSym]: [...h.slice(-29), sel.px] };
-    });
-  }, [instruments, selectedSym]);
 
   // --- Interactivity: Test Our Engine ---
   const [isTestingEngine, setIsTestingEngine] = useState(false);
@@ -784,60 +776,62 @@ export default function App() {
     }
   };
 
-  // Sparkline Chart generation function
-  const renderSparkline = (symbol: string) => {
-    const historicalSeries = historyMap[symbol] || [];
-    if (historicalSeries.length < 2) return null;
+  // Candlestick chart from REAL historical OHLC (GTS2 quote_query), with the
+  // last bar tracking the live tick price.
+  const renderCandles = (symbol: string) => {
+    if (!klines.length) {
+      return (
+        <div className="relative w-full h-[88px] bg-black/40 rounded-lg border border-slate-900/60 flex items-center justify-center text-[9px] font-mono text-slate-600 uppercase tracking-widest">
+          Loading history…
+        </div>
+      );
+    }
 
-    const minVal = Math.min(...historicalSeries);
-    const maxVal = Math.max(...historicalSeries);
-    const valRange = maxVal - minVal || 1;
+    const VISIBLE = 48;
+    const slice = klines.slice(-VISIBLE).map((k) => ({ o: k.o, h: k.h, l: k.l, c: k.c }));
 
-    const svgW = 190;
-    const svgH = 50;
-    const paddingOffset = 5;
+    // Let the newest bar follow the live price.
+    const inst = instruments.find((x) => x.sym === symbol);
+    if (inst?.px && slice.length) {
+      const last = slice[slice.length - 1];
+      last.c = inst.px;
+      last.h = Math.max(last.h, inst.px);
+      last.l = Math.min(last.l, inst.px);
+    }
 
-    const coordinateString = historicalSeries.map((price, idx) => {
-      const x = paddingOffset + (idx / (historicalSeries.length - 1)) * (svgW - paddingOffset * 2);
-      const y = svgH - paddingOffset - ((price - minVal) / valRange) * (svgH - paddingOffset * 2);
-      return `${x},${y}`;
-    }).join(" ");
+    const minVal = Math.min(...slice.map((c) => c.l));
+    const maxVal = Math.max(...slice.map((c) => c.h));
+    const range = maxVal - minVal || 1;
 
-    const finalVal = historicalSeries[historicalSeries.length - 1];
-    const initialVal = historicalSeries[historicalSeries.length - 2];
-    const isGrowing = finalVal >= initialVal;
-    
-    // Choose neon golden hue for gold symbols, brand neon green for others
-    const isGold = symbol.includes("XAU");
-    const strokeLineColor = isGold ? "#D4AF37" : (isGrowing ? "#3ddc6c" : "#f43f5e");
+    const svgW = 260;
+    const svgH = 88;
+    const padY = 6;
+    const padX = 3;
+    const n = slice.length;
+    const slot = (svgW - padX * 2) / n;
+    const bodyW = Math.max(1.2, slot * 0.66);
+    const yOf = (p: number) => svgH - padY - ((p - minVal) / range) * (svgH - padY * 2);
+
+    const isGold = symbol.includes("XAU") || symbol.includes("XAG");
+    const upColor = isGold ? "#D4AF37" : "#3ddc6c";
+    const downColor = isGold ? "#a87d2e" : "#f43f5e";
 
     return (
-      <div className="relative w-full h-[52px] bg-black/40 rounded-lg border border-slate-900/60 overflow-hidden flex items-center justify-center">
+      <div className="relative w-full h-[92px] bg-black/40 rounded-lg border border-slate-900/60 overflow-hidden">
         <svg className="w-full h-full" viewBox={`0 0 ${svgW} ${svgH}`} preserveAspectRatio="none">
-          <polyline
-            fill="none"
-            stroke={strokeLineColor}
-            strokeWidth="2.0"
-            points={coordinateString}
-          />
-          <path
-            d={`M ${paddingOffset},${svgH} L ${coordinateString} L ${svgW - paddingOffset},${svgH} Z`}
-            fill={`url(#line-grad-${symbol.replace("/", "-")})`}
-            opacity="0.12"
-          />
-          <defs>
-            <linearGradient id={`line-grad-${symbol.replace("/", "-")}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={strokeLineColor} />
-              <stop offset="100%" stopColor="transparent" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <circle
-            cx={paddingOffset + (historicalSeries.length - 1) / (historicalSeries.length - 1) * (svgW - paddingOffset * 2)}
-            cy={svgH - paddingOffset - ((finalVal - minVal) / valRange) * (svgH - paddingOffset * 2)}
-            r="3"
-            fill={strokeLineColor}
-            className="animate-ping"
-          />
+          {slice.map((c, i) => {
+            const cx = padX + slot * (i + 0.5);
+            const up = c.c >= c.o;
+            const color = up ? upColor : downColor;
+            const bodyTop = Math.min(yOf(c.o), yOf(c.c));
+            const bodyH = Math.max(0.8, Math.abs(yOf(c.c) - yOf(c.o)));
+            return (
+              <g key={i}>
+                <line x1={cx} x2={cx} y1={yOf(c.h)} y2={yOf(c.l)} stroke={color} strokeWidth="0.7" />
+                <rect x={cx - bodyW / 2} y={bodyTop} width={bodyW} height={bodyH} fill={color} rx="0.3" />
+              </g>
+            );
+          })}
         </svg>
       </div>
     );
@@ -1054,18 +1048,21 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Sparklines display */}
+              {/* Candlestick display */}
               <div className="pt-3 border-t border-slate-900/80">
                 <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 mb-2">
                   <span className="font-bold flex items-center gap-1.5 uppercase tracking-wide">
                     <TrendingUp className="w-3.5 h-3.5 text-[#3ddc6c]" />
-                    {selectedSym} Sparkline (30t)
+                    {selectedSym} · 5M
                   </span>
                   <span className="font-mono font-bold text-slate-200">
                     {selectedAsset.px ? selectedAsset.px.toLocaleString("en-US", { minimumFractionDigits: selectedAsset.dp }) : "—"}
                   </span>
                 </div>
-                {renderSparkline(selectedSym)}
+                {renderCandles(selectedSym)}
+                <div className="mt-1 text-[8px] font-mono text-slate-600 uppercase tracking-widest text-right">
+                  Live 5-minute OHLC · GTS2 feed
+                </div>
               </div>
             </div>
 
