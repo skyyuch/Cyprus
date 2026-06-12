@@ -17,6 +17,7 @@ import {
   Send,
   ChevronDown,
   ChevronRight,
+  ArrowLeft,
   Cpu,
   Gauge,
   Layers,
@@ -79,14 +80,21 @@ export default function AetherDemo({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 font-mono">
-      <div className="w-full max-w-[1200px] h-[94vh] bg-[#05080b] border border-slate-900 rounded-2xl shadow-2xl flex flex-col overflow-hidden relative">
+    <div className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-md flex items-stretch sm:items-center justify-center p-0 sm:p-4 font-mono">
+      <div className="w-full max-w-[1200px] h-[100dvh] sm:h-[94vh] bg-[#05080b] border-0 sm:border border-slate-900 rounded-none sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden relative">
         <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#3ddc6c]/40 to-transparent" />
 
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-900 bg-black/50">
-          <div className="flex items-center gap-2.5">
-            <span className="p-1.5 rounded-lg bg-[#3ddc6c]/10 text-[#3ddc6c] border border-[#3ddc6c]/25">
+        <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-3 border-b border-slate-900 bg-black/50">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            <button
+              onClick={onClose}
+              aria-label="Back"
+              className="sm:hidden p-1.5 -ml-1 text-slate-300 hover:text-white active:scale-95 rounded-lg cursor-pointer"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <span className="p-1.5 rounded-lg bg-[#3ddc6c]/10 text-[#3ddc6c] border border-[#3ddc6c]/25 shrink-0">
               <Sparkles className="w-4 h-4" />
             </span>
             <div>
@@ -118,7 +126,8 @@ export default function AetherDemo({
             </button>
             <button
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-white border border-slate-900 rounded-lg cursor-pointer"
+              aria-label="Close"
+              className="hidden sm:block p-2 text-slate-400 hover:text-white border border-slate-900 rounded-lg cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -132,10 +141,10 @@ export default function AetherDemo({
         </div>
 
         {/* Body */}
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-5 overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col lg:grid lg:grid-cols-5 overflow-hidden">
           {/* Chat */}
-          <div className="lg:col-span-3 flex flex-col overflow-hidden border-r border-slate-900">
-            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+          <div className="flex-1 lg:flex-none lg:col-span-3 flex flex-col min-h-0 overflow-hidden lg:border-r border-slate-900">
+            <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 custom-scrollbar">
               {messages.length === 0 && <EmptyState onPick={submit} />}
               {messages.map((m) => (
                 <MessageBubble key={m.id} role={m.role} text={m.text} error={m.error} toolCalls={m.toolCalls} />
@@ -186,8 +195,8 @@ export default function AetherDemo({
             </form>
           </div>
 
-          {/* Dashboard */}
-          <div className="lg:col-span-2 overflow-y-auto p-4 space-y-4 bg-[#04070a] custom-scrollbar">
+          {/* Dashboard (desktop only — mobile gets a focused full-screen chat) */}
+          <div className="hidden lg:block lg:col-span-2 overflow-y-auto p-4 space-y-4 bg-[#04070a] custom-scrollbar">
             <Dashboard activeSym={activeSym} instruments={instruments} snapshot={snapshot} onSelectSym={onSelectSym} />
           </div>
         </div>
